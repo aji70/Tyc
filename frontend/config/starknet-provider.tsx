@@ -6,26 +6,28 @@ import {
   StarknetConfig,
   jsonRpcProvider,
   cartridge,
-  InjectedConnector,
-  Connector,
 } from '@starknet-react/core';
 import { ControllerConnector } from '@cartridge/connector';
 import { constants } from 'starknet';
 import { TYCOON_SESSION_POLICIES } from '@/constants/sessionPolicies';
 
-// Ensure every Connector has externalDetectWallets so StarknetConfig/setInterval never throws
 const noop = function externalDetectWallets() {};
-const patchProto = (proto: object) => {
-  if (!proto || typeof (proto as Record<string, unknown>).externalDetectWallets === 'function') return;
-  try {
-    Object.defineProperty(proto, 'externalDetectWallets', { value: noop, writable: true, configurable: true });
-  } catch (_) {}
-};
-if (typeof Connector !== 'undefined' && Connector.prototype) patchProto(Connector.prototype);
-if (typeof InjectedConnector !== 'undefined' && InjectedConnector.prototype) patchProto(InjectedConnector.prototype);
-if (typeof ControllerConnector !== 'undefined' && ControllerConnector.prototype) patchProto(ControllerConnector.prototype);
 
-const cartridgeConnector = new ControllerConnector({
+/** Wraps a connector in a Proxy so any code that calls .externalDetectWallets() gets a noop instead of throwing. */
+function wrapConnectorWithExternalDetect<T extends object>(connector: T): T {
+  return new Proxy(connector, {
+    get(target, prop, receiver) {
+      if (prop === 'externalDetectWallets') {
+        const val = Reflect.get(target, prop, receiver);
+        if (typeof val === 'function') return val;
+        return noop;
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as T;
+}
+
+const cartridgeConnectorRaw = new ControllerConnector({
   defaultChainId: constants.StarknetChainId.SN_SEPOLIA,
   chains: [
     {
@@ -43,9 +45,7 @@ const cartridgeConnector = new ControllerConnector({
   policies: TYCOON_SESSION_POLICIES,
 });
 
-// Ensure instance has externalDetectWallets (in case prototype patch missed or connector is from different bundle)
-const c = cartridgeConnector as unknown as Record<string, unknown>;
-if (typeof c.externalDetectWallets !== 'function') c.externalDetectWallets = noop;
+const cartridgeConnector = wrapConnectorWithExternalDetect(cartridgeConnectorRaw);
 
 export function StarknetProvider({ children }: { children: React.ReactNode }) {
   const provider = jsonRpcProvider({
@@ -64,11 +64,7 @@ export function StarknetProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const connectors = [cartridgeConnector].map((conn) => {
-    const k = conn as unknown as Record<string, unknown>;
-    if (k && typeof k.externalDetectWallets !== 'function') k.externalDetectWallets = noop;
-    return conn;
-  });
+  const connectors = [cartridgeConnector];
 
   return (
     <StarknetConfig
