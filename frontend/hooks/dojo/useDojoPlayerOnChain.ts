@@ -7,6 +7,12 @@ import { dojoConfig } from '@/lib/dojo/dojoConfig';
 
 const PLAYER_TAG = 'tycoon-player';
 
+/** Fallback Starknet Sepolia RPCs when primary fails. */
+const SEPOLIA_RPC_FALLBACKS = [
+  'https://starknet-sepolia.public.blastapi.io',
+  'https://starknet-sepolia.drpc.org',
+];
+
 /** Minimal ABI for player view calls so Contract compiles calldata correctly (ContractAddress encoding). */
 const PLAYER_VIEW_ABI = [
   {
@@ -32,9 +38,9 @@ function getPlayerContractAddress(): string {
   return contract?.address ?? '';
 }
 
-/** Normalize address to hex. */
+/** Normalize address to hex (lowercase for consistency). */
 function normalizeAddress(addr: string): string {
-  const s = addr.trim();
+  const s = addr.trim().toLowerCase();
   return s.startsWith('0x') ? s : `0x${s}`;
 }
 
@@ -83,14 +89,12 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       return;
     }
 
-    const rpcUrl =
+    const normalizedAddress = normalizeAddress(address);
+    const primaryRpc =
       (dojoConfig as { rpcUrl?: string }).rpcUrl ??
       process.env.NEXT_PUBLIC_STARKNET_RPC_URL ??
       'https://api.cartridge.gg/x/starknet/sepolia';
-    const provider = new RpcProvider({ nodeUrl: rpcUrl });
-    const playerContract = new Contract(PLAYER_VIEW_ABI, playerAddress, provider);
-    const normalizedAddress = normalizeAddress(address);
-
+    const rpcUrls = [primaryRpc, ...SEPOLIA_RPC_FALLBACKS];
     let cancelled = false;
 
     (async () => {
@@ -115,68 +119,72 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
         }
       };
 
-      try {
-        // 1) Try get_username first (Contract uses ABI so calldata is encoded correctly)
-        let name: string | null = null;
+      let lastErr: Error | null = null;
+      for (const rpcUrl of rpcUrls) {
+        if (cancelled) break;
         try {
-          const usernameRes = await playerContract.call('get_username', [normalizedAddress]);
-          if (cancelled) return;
-          const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
-          name = decodeUsername(arr);
-        } catch (_) {
-          // ignore; we'll try is_registered
-        }
+          const provider = new RpcProvider({ nodeUrl: rpcUrl });
+          const playerContract = new Contract(PLAYER_VIEW_ABI, playerAddress, provider);
 
-        if (name?.trim()) {
-          setIsRegisteredOnChain(true);
-          setUsernameOnChain(name.trim());
-          if (!cancelled) setIsLoading(false);
-          return;
-        }
-
-        // 2) Call is_registered (ABI-encoded calldata)
-        const res = await playerContract.call('is_registered', [normalizedAddress]);
-
-        if (cancelled) return;
-
-        const result = Array.isArray(res) ? res : getResult(res);
-        const raw = result[0];
-        // Handle both raw (string felt) and parsed (boolean) return
-        const isReg =
-          result.length > 0 &&
-          (raw === true ||
-            raw === '0x1' ||
-            raw === '1' ||
-            (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
-        setIsRegisteredOnChain(!!isReg);
-
-        if (!isReg) {
-          setUsernameOnChain(null);
-          if (!cancelled) setIsLoading(false);
-          return;
-        }
-
-        // 3) If registered but we didn't get name yet, fetch it
-        if (!name) {
+          // 1) Try get_username first
+          let name: string | null = null;
           try {
-            const usernameRes2 = await playerContract.call('get_username', [normalizedAddress]);
-            if (!cancelled) {
-              const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
-              name = decodeUsername(arr2);
-            }
+            const usernameRes = await playerContract.call('get_username', [normalizedAddress]);
+            if (cancelled) break;
+            const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
+            name = decodeUsername(arr);
           } catch (_) {}
+
+          if (name?.trim()) {
+            setIsRegisteredOnChain(true);
+            setUsernameOnChain(name.trim());
+            if (!cancelled) setIsLoading(false);
+            return;
+          }
+
+          // 2) Call is_registered
+          const res = await playerContract.call('is_registered', [normalizedAddress]);
+          if (cancelled) break;
+
+          const result = Array.isArray(res) ? res : getResult(res);
+          const raw = result[0];
+          const isReg =
+            result.length > 0 &&
+            (raw === true ||
+              raw === '0x1' ||
+              raw === '1' ||
+              (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
+          setIsRegisteredOnChain(!!isReg);
+
+          if (!isReg) {
+            setUsernameOnChain(null);
+            if (!cancelled) setIsLoading(false);
+            return;
+          }
+
+          if (!name) {
+            try {
+              const usernameRes2 = await playerContract.call('get_username', [normalizedAddress]);
+              if (!cancelled) {
+                const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
+                name = decodeUsername(arr2);
+              }
+            } catch (_) {}
+          }
+          setUsernameOnChain(name);
+          if (!cancelled) setIsLoading(false);
+          return;
+        } catch (err) {
+          lastErr = err instanceof Error ? err : new Error(String(err));
+          if (process.env.NODE_ENV === 'development') console.warn('[useDojoPlayerOnChain] RPC failed:', rpcUrl, lastErr.message);
         }
-        setUsernameOnChain(name);
-      } catch (err) {
-        if (!cancelled) {
-          const e = err instanceof Error ? err : new Error(String(err));
-          setError(e);
-          if (process.env.NODE_ENV === 'development') console.error('[useDojoPlayerOnChain]', e);
-          setIsRegisteredOnChain(false);
-          setUsernameOnChain(null);
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      }
+
+      if (!cancelled) {
+        if (lastErr) setError(lastErr);
+        setIsRegisteredOnChain(false);
+        setUsernameOnChain(null);
+        setIsLoading(false);
       }
     })();
 

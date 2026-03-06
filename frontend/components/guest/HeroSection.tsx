@@ -238,31 +238,27 @@ const HeroSection: React.FC = () => {
         return;
       }
 
-      // Backend may fail with "username already exists" or "user already registered" — user is still registered on-chain; treat as success if we can load them
+      // Contract can revert with "already registered"; backend may return 409. In both cases user is registered on-chain — show Welcome.
       const isAlreadyExists =
         err?.status === 409 ||
         err?.response?.status === 409 ||
-        /already exists|already registered|username.*taken|user.*exists/i.test(err?.message ?? "");
+        /already exists|already registered|username.*taken|user.*exists/i.test(String(err?.message ?? err?.shortMessage ?? ""));
 
       if (isAlreadyExists) {
+        setLocalRegistered(true);
+        setLocalUsername(finalUsername);
         try {
           const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Starknet`);
-          if (res?.success && res?.data) {
-            setUser(res.data as UserType);
-            setLocalRegistered(true);
-            setLocalUsername(finalUsername);
-            toast.update(toastId, {
-              render: "Welcome to Tycoon!",
-              type: "success",
-              isLoading: false,
-              autoClose: 4000,
-            });
-            router.refresh();
-            return;
-          }
-        } catch (_) {
-          // fall through to generic error
-        }
+          if (res?.success && res?.data) setUser(res.data as UserType);
+        } catch (_) {}
+        toast.update(toastId, {
+          render: "Welcome back!",
+          type: "success",
+          isLoading: false,
+          autoClose: 4000,
+        });
+        router.refresh();
+        return;
       }
 
       console.error("[HeroSection] Registration failed:", err?.message ?? err);
