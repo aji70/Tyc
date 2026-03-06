@@ -360,10 +360,10 @@ const handleContinuePrevious = () => {
           </div>
         )}
 
-        {loading && (
+        {(loading || (address && isOnChainLoading)) && (
           <div className="mt-20 md:mt-28 lg:mt-0">
             <p className="font-orbitron lg:text-[24px] md:text-[20px] text-[16px] font-[700] text-[#00F0FF] text-center">
-              Registering... Please wait.
+              {loading ? "Registering... Please wait." : "Checking registration..."}
             </p>
           </div>
         )}
@@ -431,8 +431,8 @@ const handleContinuePrevious = () => {
         </div>
 
         <div className="z-1 w-full flex flex-col justify-center items-center mt-6 gap-4">
-          {/* Wallet: username input for new users */}
-          {address && registrationStatus === "none" && !loading && (
+          {/* Wallet: username input for new users (only after we know they're not registered) */}
+          {address && registrationStatus === "none" && !loading && !isOnChainLoading && (
             <input
               type="text"
               value={inputUsername}
@@ -459,8 +459,8 @@ const handleContinuePrevious = () => {
             </div>
           )}
 
-          {/* "Let's Go!" for wallet users (backend-only or none) */}
-          {address && registrationStatus !== "fully-registered" && !loading && (
+          {/* "Let's Go!" for wallet users (backend-only or none; hide while checking on-chain) */}
+          {address && registrationStatus !== "fully-registered" && !loading && !isOnChainLoading && (
             <button
               onClick={handleRegister}
               disabled={

@@ -349,9 +349,9 @@ const handleContinuePrevious = () => {
             </>
           )}
 
-          {loading && (
+          {(loading || (address && isOnChainLoading)) && (
             <p className="font-orbitron text-lg sm:text-xl font-bold text-[#00F0FF]">
-              Registering... Please wait
+              {loading ? "Registering... Please wait" : "Checking registration..."}
             </p>
           )}
         </div>
@@ -386,7 +386,7 @@ const handleContinuePrevious = () => {
 
         {/* Main action area */}
         <div className="mt-8 sm:mt-10 w-full max-w-[380px] flex flex-col items-center gap-5 sm:gap-6 flex-1">
-          {address && registrationStatus === "none" && !loading && (
+          {address && registrationStatus === "none" && !loading && !isOnChainLoading && (
             <input
               type="text"
               value={inputUsername}
@@ -405,7 +405,7 @@ const handleContinuePrevious = () => {
             </div>
           )}
 
-          {address && registrationStatus !== "fully-registered" && !loading && (
+          {address && registrationStatus !== "fully-registered" && !loading && !isOnChainLoading && (
             <button
               onClick={handleRegister}
               disabled={loading || registerPending || (registrationStatus === "none" && !inputUsername.trim())}

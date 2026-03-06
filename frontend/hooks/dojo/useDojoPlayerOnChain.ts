@@ -20,11 +20,17 @@ function normalizeAddress(addr: string): string {
   return s.startsWith('0x') ? s : `0x${s}`;
 }
 
-/** Extract result array from RPC response (array or { result: string[] }). */
+/** Extract result array from RPC response (array or { result: string[] } or nested). */
 function getResult(res: unknown): string[] {
   if (Array.isArray(res)) return res;
-  const r = res as { result?: string[] };
-  return r?.result ?? [];
+  const r = res as { result?: unknown };
+  const inner = r?.result;
+  if (Array.isArray(inner)) return inner;
+  if (inner != null && typeof inner === 'object' && 'result' in inner) {
+    const nested = (inner as { result?: unknown }).result;
+    if (Array.isArray(nested)) return nested;
+  }
+  return [];
 }
 
 export interface DojoPlayerOnChainResult {
@@ -71,8 +77,41 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     (async () => {
       setError(null);
       setIsLoading(true);
+      const decodeUsername = (result: string[]): string | null => {
+        if (result.length === 0 || !result[0]) return null;
+        try {
+          const felt = result[0];
+          const hex = felt.startsWith('0x') ? felt : `0x${felt}`;
+          if (BigInt(hex) === BigInt(0)) return null;
+          return shortString.decodeShortString(hex);
+        } catch {
+          return null;
+        }
+      };
+
       try {
-        // entrypoint must be the function *name*; starknet.js calls getSelectorFromName(entrypoint) internally
+        // 1) Try get_username first: if we get a non-empty name, user is registered (resilient when is_registered fails or differs)
+        let name: string | null = null;
+        try {
+          const usernameRes = await provider.callContract({
+            contractAddress: playerAddress,
+            entrypoint: 'get_username',
+            calldata: [normalizedAddress],
+          });
+          if (cancelled) return;
+          name = decodeUsername(getResult(usernameRes));
+        } catch (_) {
+          // ignore; we'll try is_registered
+        }
+
+        if (name?.trim()) {
+          setIsRegisteredOnChain(true);
+          setUsernameOnChain(name.trim());
+          if (!cancelled) setIsLoading(false);
+          return;
+        }
+
+        // 2) Otherwise call is_registered
         const res = await provider.callContract({
           contractAddress: playerAddress,
           entrypoint: 'is_registered',
@@ -82,7 +121,6 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
         if (cancelled) return;
 
         const result = getResult(res);
-        // Cairo bool: 0 or 1 (as decimal or hex "0x0" / "0x1")
         const raw = result[0];
         const isReg =
           result.length > 0 &&
@@ -91,28 +129,20 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
 
         if (!isReg) {
           setUsernameOnChain(null);
-          setIsLoading(false);
+          if (!cancelled) setIsLoading(false);
           return;
         }
 
-        const usernameRes = await provider.callContract({
-          contractAddress: playerAddress,
-          entrypoint: 'get_username',
-          calldata: [normalizedAddress],
-        });
-
-        if (cancelled) return;
-
-        const usernameResult = getResult(usernameRes);
-        let name: string | null = null;
-        if (usernameResult.length > 0 && usernameResult[0]) {
+        // 3) If registered but we didn't get name yet, fetch it
+        if (!name) {
           try {
-            const felt = usernameResult[0];
-            const hex = felt.startsWith('0x') ? felt : `0x${felt}`;
-            if (BigInt(hex) !== BigInt(0)) name = shortString.decodeShortString(hex);
-          } catch (e) {
-            if (process.env.NODE_ENV === 'development') console.warn('[useDojoPlayerOnChain] decode username:', e);
-          }
+            const usernameRes2 = await provider.callContract({
+              contractAddress: playerAddress,
+              entrypoint: 'get_username',
+              calldata: [normalizedAddress],
+            });
+            if (!cancelled) name = decodeUsername(getResult(usernameRes2));
+          } catch (_) {}
         }
         setUsernameOnChain(name);
       } catch (err) {
