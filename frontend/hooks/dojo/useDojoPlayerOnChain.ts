@@ -1,11 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RpcProvider, shortString } from 'starknet';
+import { Contract, RpcProvider, shortString } from 'starknet';
 import manifest from '@/lib/dojo/manifest_sepolia.json';
 import { dojoConfig } from '@/lib/dojo/dojoConfig';
 
 const PLAYER_TAG = 'tycoon-player';
+
+/** Minimal ABI for player view calls so Contract compiles calldata correctly (ContractAddress encoding). */
+const PLAYER_VIEW_ABI = [
+  {
+    type: 'function' as const,
+    name: 'is_registered',
+    inputs: [{ name: 'address', type: 'core::starknet::contract_address::ContractAddress' }],
+    outputs: [{ type: 'core::bool' }],
+    state_mutability: 'view' as const,
+  },
+  {
+    type: 'function' as const,
+    name: 'get_username',
+    inputs: [{ name: 'address', type: 'core::starknet::contract_address::ContractAddress' }],
+    outputs: [{ type: 'core::felt252' }],
+    state_mutability: 'view' as const,
+  },
+];
 
 function getPlayerContractAddress(): string {
   const contract = (manifest as { contracts?: { tag: string; address: string }[] }).contracts?.find(
@@ -14,13 +32,13 @@ function getPlayerContractAddress(): string {
   return contract?.address ?? '';
 }
 
-/** Normalize address to hex for calldata (Starknet expects felt as hex string). */
+/** Normalize address to hex. */
 function normalizeAddress(addr: string): string {
   const s = addr.trim();
   return s.startsWith('0x') ? s : `0x${s}`;
 }
 
-/** Extract result array from RPC response (array or { result: string[] } or nested). */
+/** Extract result array from Contract.call return (Result type or string[]). */
 function getResult(res: unknown): string[] {
   if (Array.isArray(res)) return res;
   const r = res as { result?: unknown };
@@ -70,6 +88,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       process.env.NEXT_PUBLIC_STARKNET_RPC_URL ??
       'https://api.cartridge.gg/x/starknet/sepolia';
     const provider = new RpcProvider({ nodeUrl: rpcUrl });
+    const playerContract = new Contract(PLAYER_VIEW_ABI, playerAddress, provider);
     const normalizedAddress = normalizeAddress(address);
 
     let cancelled = false;
@@ -77,11 +96,18 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     (async () => {
       setError(null);
       setIsLoading(true);
-      const decodeUsername = (result: string[]): string | null => {
-        if (result.length === 0 || !result[0]) return null;
+      const decodeUsername = (result: unknown[]): string | null => {
+        if (result.length === 0 || result[0] == null) return null;
         try {
           const felt = result[0];
-          const hex = felt.startsWith('0x') ? felt : `0x${felt}`;
+          const hex =
+            typeof felt === 'string'
+              ? felt.startsWith('0x')
+                ? felt
+                : `0x${felt}`
+              : typeof felt === 'bigint'
+                ? `0x${felt.toString(16)}`
+                : `0x${BigInt(Number(felt)).toString(16)}`;
           if (BigInt(hex) === BigInt(0)) return null;
           return shortString.decodeShortString(hex);
         } catch {
@@ -90,16 +116,13 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       };
 
       try {
-        // 1) Try get_username first: if we get a non-empty name, user is registered (resilient when is_registered fails or differs)
+        // 1) Try get_username first (Contract uses ABI so calldata is encoded correctly)
         let name: string | null = null;
         try {
-          const usernameRes = await provider.callContract({
-            contractAddress: playerAddress,
-            entrypoint: 'get_username',
-            calldata: [normalizedAddress],
-          });
+          const usernameRes = await playerContract.call('get_username', [normalizedAddress]);
           if (cancelled) return;
-          name = decodeUsername(getResult(usernameRes));
+          const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
+          name = decodeUsername(arr);
         } catch (_) {
           // ignore; we'll try is_registered
         }
@@ -111,20 +134,20 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
           return;
         }
 
-        // 2) Otherwise call is_registered
-        const res = await provider.callContract({
-          contractAddress: playerAddress,
-          entrypoint: 'is_registered',
-          calldata: [normalizedAddress],
-        });
+        // 2) Call is_registered (ABI-encoded calldata)
+        const res = await playerContract.call('is_registered', [normalizedAddress]);
 
         if (cancelled) return;
 
-        const result = getResult(res);
+        const result = Array.isArray(res) ? res : getResult(res);
         const raw = result[0];
+        // Handle both raw (string felt) and parsed (boolean) return
         const isReg =
           result.length > 0 &&
-          (raw === '0x1' || raw === '1' || (raw !== undefined && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? raw : '0') !== BigInt(0)));
+          (raw === true ||
+            raw === '0x1' ||
+            raw === '1' ||
+            (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
         setIsRegisteredOnChain(!!isReg);
 
         if (!isReg) {
@@ -136,12 +159,11 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
         // 3) If registered but we didn't get name yet, fetch it
         if (!name) {
           try {
-            const usernameRes2 = await provider.callContract({
-              contractAddress: playerAddress,
-              entrypoint: 'get_username',
-              calldata: [normalizedAddress],
-            });
-            if (!cancelled) name = decodeUsername(getResult(usernameRes2));
+            const usernameRes2 = await playerContract.call('get_username', [normalizedAddress]);
+            if (!cancelled) {
+              const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
+              name = decodeUsername(arr2);
+            }
           } catch (_) {}
         }
         setUsernameOnChain(name);
