@@ -34,7 +34,17 @@ const HeroSectionMobile: React.FC = () => {
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
-  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading } = useDojoPlayerOnChain(address ?? undefined);
+  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading, error: onChainError } = useDojoPlayerOnChain(address ?? undefined);
+
+  useEffect(() => {
+    console.log("[HeroSection-mobile] registration state", {
+      address: address ?? null,
+      isRegisteredOnChain,
+      usernameOnChain,
+      isOnChainLoading,
+      onChainError: onChainError?.message ?? null,
+    });
+  }, [address, isRegisteredOnChain, usernameOnChain, isOnChainLoading, onChainError]);
 
   useEffect(() => {
     if (address && isRegisteredOnChain) {

@@ -37,7 +37,18 @@ const HeroSection: React.FC = () => {
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
-  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading } = useDojoPlayerOnChain(address ?? undefined);
+  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading, error: onChainError } = useDojoPlayerOnChain(address ?? undefined);
+
+  // Debug: log registration state when page mounts / when address or chain state changes
+  useEffect(() => {
+    console.log("[HeroSection] registration state", {
+      address: address ?? null,
+      isRegisteredOnChain,
+      usernameOnChain,
+      isOnChainLoading,
+      onChainError: onChainError?.message ?? null,
+    });
+  }, [address, isRegisteredOnChain, usernameOnChain, isOnChainLoading, onChainError]);
 
   // When player lands: if registered on chain, sync local state so we show "Welcome [player]..."
   useEffect(() => {
