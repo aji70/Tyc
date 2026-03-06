@@ -37,6 +37,7 @@ const BFCACHE_RELOAD_SCRIPT = `
 
 // Prevents "externalDetectWallets is not a function" when Cartridge/wallet code expects it on window
 // or on the injected wallet object. Run first in head; keep patching for 15s to catch late-injected wallets.
+// Recursively patches connectors, providers, and nested starknet objects.
 const EXTERNAL_DETECT_WALLETS_SHIM = `
 (function(){
   if (typeof window === 'undefined') return;
@@ -45,20 +46,28 @@ const EXTERNAL_DETECT_WALLETS_SHIM = `
     try { Object.defineProperty(window, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); }
     catch (e) { window.externalDetectWallets = noop; }
   }
-  function patch(obj) {
-    if (obj && typeof obj === 'object' && typeof obj.externalDetectWallets !== 'function') {
+  function patch(obj, depth) {
+    if (!obj || typeof obj !== 'object' || (depth || 0) > 5) return;
+    if (typeof obj.externalDetectWallets !== 'function') {
       try { obj.externalDetectWallets = noop; } catch (e) {}
+      try { Object.defineProperty(obj, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); } catch (e) {}
+    }
+    var keys = ['connectors','connector','providers','provider','options','wallets','accounts'];
+    for (var i = 0; i < keys.length; i++) {
+      var v = obj[keys[i]];
+      if (v && typeof v === 'object') { patch(v, (depth || 0) + 1); }
+      if (Array.isArray(v)) for (var j = 0; j < v.length; j++) patch(v[j], (depth || 0) + 1);
     }
   }
   function patchAll() {
     try {
-      patch(window.starknet);
+      patch(window.starknet, 0);
       for (var k in window) {
-        if (k.indexOf('starknet_') === 0 && window[k]) patch(window[k]);
+        if ((k.indexOf('starknet_') === 0 || k === 'starknet') && window[k]) patch(window[k], 0);
       }
       if (window.starknet && typeof window.starknet === 'object') {
         var arr = window.starknet;
-        if (Array.isArray(arr)) for (var i = 0; i < arr.length; i++) patch(arr[i]);
+        if (Array.isArray(arr)) for (var i = 0; i < arr.length; i++) patch(arr[i], 0);
       }
     } catch (e) {}
   }
