@@ -32,6 +32,9 @@ function getProxyRpcUrl(): string | null {
   return `${origin}/api/starknet-rpc`;
 }
 
+/** Use 'latest' block - Cartridge RPC rejects 'pending' with "Invalid block id". */
+const CALL_OPTS = { blockIdentifier: 'latest' as const } as const;
+
 /** ABI for Player system view functions. Use simple types so starknet.js encodes calldata correctly. */
 const PLAYER_VIEW_ABI = [
   {
@@ -286,7 +289,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
           const usernameFelt = stringToFelt(name.trim());
           const felt = Array.isArray(usernameFelt) ? usernameFelt[0] : usernameFelt;
           const userRes = await withTimeout(
-            contract.call('get_user', [felt]),
+            contract.call('get_user', [felt], CALL_OPTS),
             RPC_CALL_MS,
             'get_user'
           );
@@ -312,7 +315,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
             let name: string | null = null;
             try {
               const usernameRes = await withTimeout(
-                contract.call('get_username', [callAddress]),
+                contract.call('get_username', [callAddress], CALL_OPTS),
                 RPC_CALL_MS,
                 'get_username'
               );
@@ -332,7 +335,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
             }
 
             const res = await withTimeout(
-              contract.call('is_registered', [callAddress]),
+              contract.call('is_registered', [callAddress], CALL_OPTS),
               RPC_CALL_MS,
               'is_registered'
             );
@@ -361,7 +364,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
             if (!name) {
               try {
                 const usernameRes2 = await withTimeout(
-                  contract.call('get_username', [callAddress]),
+                  contract.call('get_username', [callAddress], CALL_OPTS),
                   RPC_CALL_MS,
                   'get_username'
                 );
