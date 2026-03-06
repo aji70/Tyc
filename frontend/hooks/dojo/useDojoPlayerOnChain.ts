@@ -2,13 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { Contract, RpcProvider, shortString } from 'starknet';
+import { useDojoSDK } from '@dojoengine/sdk/react';
 import manifest from '@/lib/dojo/manifest_sepolia.json';
 import { dojoConfig } from '@/lib/dojo/dojoConfig';
 import { stringToFelt } from '@/utils/starknet';
-import { DOJO_WORLD_ADDRESS } from '@/constants/starknet';
 
 const PLAYER_TAG = 'tycoon-player';
 const RPC_CALL_MS = 15_000;
+
+/**
+ * Same reading path as the rest of the frontend:
+ * - When Dojo SDK is available (Torii configured): use client.player.* from setupWorld(provider)
+ *   → provider.call("tycoon", build_player_*_calldata(...)) in contracts.gen.ts
+ * - When SDK is not available: raw RPC to the Player system contract from manifest (tycoon-player).
+ */
 
 /** Fallback Starknet Sepolia RPCs when primary fails. */
 const SEPOLIA_RPC_FALLBACKS = [
@@ -54,14 +61,14 @@ const PLAYER_VIEW_ABI = [
   },
 ];
 
-/** Use World contract for view calls (same as Starkscan) — Player system is invoked via World. */
-function getContractAddressForViewCalls(): string {
-  const fromEnv =
-    typeof process !== 'undefined' && process.env.NEXT_PUBLIC_DOJO_WORLD_ADDRESS;
-  const envStr = typeof fromEnv === 'string' ? fromEnv.trim() : '';
-  if (envStr) return envStr;
-  const world = (manifest as { world?: { address?: string } }).world?.address;
-  return world ?? DOJO_WORLD_ADDRESS;
+/** Player system contract address — read from manifest (same system Starkscan shows for player entrypoints). */
+function getPlayerContractAddress(): string {
+  const contracts = (manifest as { contracts?: { tag: string; address: string }[] }).contracts;
+  const player = contracts?.find((c) => c.tag === PLAYER_TAG);
+  const addr = player?.address?.trim();
+  if (addr) return addr;
+  const envAddr = typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_TYCOON_PLAYER_ADDRESS : undefined;
+  return (typeof envAddr === 'string' ? envAddr : '') || '';
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -212,7 +219,9 @@ export interface DojoPlayerOnChainResult {
 
 /**
  * When a player lands, check if they are registered on the Dojo contract.
- * Uses RPC only (no Torii). entrypoint must be the *name* (starknet.js hashes it).
+ * Uses the same reading path as the rest of the frontend (contracts.gen / useDojoPlayerActions):
+ * - When Dojo SDK is available: client.player.getUsername, isRegistered, getUser (provider.call("tycoon", ...)).
+ * - When SDK is not available: raw RPC to Player system contract from manifest (tycoon-player).
  */
 export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnChainResult {
   const [isRegisteredOnChain, setIsRegisteredOnChain] = useState(false);
@@ -220,6 +229,8 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
   const [userOnChain, setUserOnChain] = useState<DojoUserOnChain | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  const dojoClient = useDojoSDK()?.client;
 
   useEffect(() => {
     if (!address?.trim()) {
@@ -231,23 +242,89 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       return;
     }
 
-    const contractAddress = getContractAddressForViewCalls();
-    if (!contractAddress) {
+    const normalizedAddress = normalizeAddress(address);
+    let cancelled = false;
+    setError(null);
+    setIsLoading(true);
+
+    if (dojoClient?.player) {
+      (async () => {
+        try {
+          const [nameRes, isRegRes] = await Promise.all([
+            dojoClient.player.getUsername(normalizedAddress),
+            dojoClient.player.isRegistered(normalizedAddress),
+          ]);
+          if (cancelled) return;
+
+          const rawBool = Array.isArray(isRegRes) ? isRegRes[0] : isRegRes;
+          const isReg =
+            rawBool === true ||
+            rawBool === '0x1' ||
+            rawBool === '1' ||
+            (rawBool !== undefined && rawBool !== false && rawBool !== '0' && rawBool !== '0x0' && String(rawBool) !== '');
+
+          let name: string | null = null;
+          if (nameRes != null) {
+            if (typeof nameRes === 'string' && nameRes.trim()) name = nameRes.trim();
+            else if (Array.isArray(nameRes) && nameRes[0] != null) {
+              try {
+                const hex =
+                  typeof nameRes[0] === 'string'
+                    ? nameRes[0].startsWith('0x')
+                      ? nameRes[0]
+                      : `0x${nameRes[0]}`
+                    : `0x${BigInt(Number(nameRes[0])).toString(16)}`;
+                if (BigInt(hex) !== BigInt(0)) name = shortString.decodeShortString(hex);
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+
+          if (!cancelled) {
+            setIsRegisteredOnChain(!!isReg);
+            setUsernameOnChain(name);
+          }
+          if (!isReg || !name?.trim()) {
+            if (!cancelled) setUserOnChain(null);
+            return;
+          }
+          try {
+            const usernameFelt = stringToFelt(name.trim());
+            const felt = Array.isArray(usernameFelt) ? usernameFelt[0] : usernameFelt;
+            const userRes = await dojoClient.player.getUser(felt);
+            if (cancelled) return;
+            const raw = Array.isArray(userRes) ? userRes : (userRes as { result?: unknown })?.result;
+            const arr = Array.isArray(raw) ? raw : [];
+            const fullUser = parseGetUserResult(arr.length > 0 ? arr : (userRes as Record<string, unknown>), name);
+            if (!cancelled && fullUser) setUserOnChain(fullUser);
+          } catch {
+            /* ignore */
+          }
+        } catch (err) {
+          if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)));
+        } finally {
+          if (!cancelled) setIsLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const playerContractAddress = getPlayerContractAddress();
+    if (!playerContractAddress) {
       setIsLoading(false);
       return;
     }
 
-    const normalizedAddress = normalizeAddress(address);
     const primaryRpc =
       (dojoConfig as { rpcUrl?: string }).rpcUrl ??
       (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STARKNET_RPC_URL) ??
       'https://api.cartridge.gg/x/starknet/sepolia';
     const rpcUrls = [primaryRpc, ...SEPOLIA_RPC_FALLBACKS];
-    let cancelled = false;
 
     (async () => {
-      setError(null);
-      setIsLoading(true);
       const decodeUsername = (result: unknown[]): string | null => {
         if (result.length === 0 || result[0] == null) return null;
         try {
@@ -289,7 +366,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
           if (cancelled) break;
           try {
             const provider = new RpcProvider({ nodeUrl: rpcUrl });
-            const contract = new Contract(PLAYER_VIEW_ABI, contractAddress, provider);
+            const contract = new Contract(PLAYER_VIEW_ABI, playerContractAddress, provider);
 
             // 1) Try get_username first (same contract as Starkscan "Read")
             let name: string | null = null;
@@ -394,7 +471,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [address, dojoClient]);
 
   return { isRegisteredOnChain, usernameOnChain, userOnChain, isLoading, error };
 }
