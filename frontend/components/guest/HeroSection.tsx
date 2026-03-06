@@ -37,29 +37,24 @@ const HeroSection: React.FC = () => {
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
-  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading, error: onChainError } = useDojoPlayerOnChain(address ?? undefined);
+  const { isRegisteredOnChain, isLoading: isOnChainLoading, error: onChainError } = useDojoPlayerOnChain(address ?? undefined);
 
-  // Debug: log registration state when page mounts / when address or chain state changes
   useEffect(() => {
     console.log("[HeroSection] registration state", {
       address: address ?? null,
       isRegisteredOnChain,
-      usernameOnChain,
       isOnChainLoading,
       onChainError: onChainError?.message ?? null,
     });
-  }, [address, isRegisteredOnChain, usernameOnChain, isOnChainLoading, onChainError]);
+  }, [address, isRegisteredOnChain, isOnChainLoading, onChainError]);
 
-  // When player lands: if registered on chain, sync local state so we show "Welcome [player]..."
   useEffect(() => {
     if (address && isRegisteredOnChain) {
       setLocalRegistered(true);
-      if (usernameOnChain?.trim()) setLocalUsername((prev) => prev || usernameOnChain.trim());
     }
-  }, [address, isRegisteredOnChain, usernameOnChain]);
+  }, [address, isRegisteredOnChain]);
 
   const isRegisteredLoading = isOnChainLoading;
-  const fetchedUsername = usernameOnChain ?? undefined;
 
   const { data: gameCode } = usePreviousGameCode(address);
 
@@ -174,8 +169,8 @@ const HeroSection: React.FC = () => {
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
-    return user?.username || localUsername || usernameOnChain || fetchedUsername || inputUsername || "Player";
-  }, [guestUser, user, localUsername, usernameOnChain, fetchedUsername, inputUsername]);
+    return user?.username || localUsername || inputUsername || "Player";
+  }, [guestUser, user, localUsername, inputUsername]);
 
   // Not on contract: if backend has user, prefill username once
   useEffect(() => {
