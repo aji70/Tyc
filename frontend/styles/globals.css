@@ -46,7 +46,13 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* System font fallback when NEXT_PUBLIC_USE_SYSTEM_FONTS=true (offline/CI build) */
+/* Font variables: loaded at runtime via layout link to Google Fonts (no build-time fetch) */
+:root {
+  --font-dm-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-krona-one: "Krona One", ui-sans-serif, system-ui, sans-serif;
+  --font-orbitron-sans: "Orbitron", ui-sans-serif, system-ui, sans-serif;
+}
+
 .font-system-fallback {
   --font-dm-sans: ui-sans-serif, system-ui, sans-serif;
   --font-krona-one: ui-sans-serif, system-ui, sans-serif;

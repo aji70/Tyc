@@ -22,7 +22,7 @@ import Script from "next/script";
 import ClientLayout from "../clients/ClientLayout"; // ← Import the new wrapper
 import QueryProvider from "./QueryProvider";
 import BfcacheReloadGuard from "@/components/BfcacheReloadGuard";
-import { StarknetDojoProviders } from "@/components/StarknetDojoProviders";
+import { LayoutBody } from "./layout-body";
 
 // Run before React: (1) Reload board when restored from bfcache so WebGL is fresh. (2) Disable bfcache on board so back button does full load instead of restore (avoids Context Lost + .style crash).
 const BFCACHE_RELOAD_SCRIPT = `
@@ -80,12 +80,18 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,100..1000&family=Krona+One&family=Orbitron:wght@400;500;700&display=swap"
+        />
+      </head>
       <body className="antialiased bg-[#010F10] w-full">
         <Script id="bfcache-reload" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: BFCACHE_RELOAD_SCRIPT }} />
         <FarcasterReady />
         <PrivyProviderWrapper>
           <ContextProvider cookies={cookies}>
-            <StarknetDojoProviders>
+            <LayoutBody>
             <TycoonProvider>
               <GuestAuthProvider>
               <PrivyBackendSync />
@@ -128,7 +134,7 @@ export default async function RootLayout({
               </TournamentProvider>
               </GuestAuthProvider>
             </TycoonProvider>
-            </StarknetDojoProviders>
+            </LayoutBody>
           </ContextProvider>
         </PrivyProviderWrapper>
       </body>

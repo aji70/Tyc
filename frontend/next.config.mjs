@@ -6,6 +6,14 @@ const nextConfig = {
     // Ignore type errors in dependencies (e.g. @ethereumjs/tx overload signature)
     ignoreBuildErrors: true,
   },
+  // Dojo SDK uses @dojoengine/torii-wasm (.wasm). Webpack's parser can fail on modern WASM features;
+  // set NEXT_PUBLIC_SKIP_STARKNET=1 to build without Dojo (app runs without Starknet).
+  webpack(config, { isServer, dev }) {
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    config.output.webassemblyModuleFilename =
+      isServer && !dev ? '../static/wasm/[modulehash].wasm' : 'static/wasm/[modulehash].wasm';
+    return config;
+  },
   async redirects() {
     return [
       {
