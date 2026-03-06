@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { RpcProvider, getSelectorFromName, shortString } from 'starknet';
+import { RpcProvider, shortString } from 'starknet';
 import manifest from '@/lib/dojo/manifest_sepolia.json';
 import { dojoConfig } from '@/lib/dojo/dojoConfig';
 
@@ -14,6 +14,19 @@ function getPlayerContractAddress(): string {
   return contract?.address ?? '';
 }
 
+/** Normalize address to hex for calldata (Starknet expects felt as hex string). */
+function normalizeAddress(addr: string): string {
+  const s = addr.trim();
+  return s.startsWith('0x') ? s : `0x${s}`;
+}
+
+/** Extract result array from RPC response (array or { result: string[] }). */
+function getResult(res: unknown): string[] {
+  if (Array.isArray(res)) return res;
+  const r = res as { result?: string[] };
+  return r?.result ?? [];
+}
+
 export interface DojoPlayerOnChainResult {
   isRegisteredOnChain: boolean;
   usernameOnChain: string | null;
@@ -23,7 +36,7 @@ export interface DojoPlayerOnChainResult {
 
 /**
  * When a player lands, check if they are registered on the Dojo contract.
- * If so, we can show "Welcome [username]...". Uses RPC only (no Torii).
+ * Uses RPC only (no Torii). entrypoint must be the *name* (starknet.js hashes it).
  */
 export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnChainResult {
   const [isRegisteredOnChain, setIsRegisteredOnChain] = useState(false);
@@ -46,8 +59,12 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       return;
     }
 
-    const rpcUrl = (dojoConfig as { rpcUrl?: string }).rpcUrl ?? process.env.NEXT_PUBLIC_STARKNET_RPC_URL ?? 'https://api.cartridge.gg/x/starknet/sepolia';
+    const rpcUrl =
+      (dojoConfig as { rpcUrl?: string }).rpcUrl ??
+      process.env.NEXT_PUBLIC_STARKNET_RPC_URL ??
+      'https://api.cartridge.gg/x/starknet/sepolia';
     const provider = new RpcProvider({ nodeUrl: rpcUrl });
+    const normalizedAddress = normalizeAddress(address);
 
     let cancelled = false;
 
@@ -55,17 +72,21 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       setError(null);
       setIsLoading(true);
       try {
-        const isRegSelector = getSelectorFromName('is_registered');
+        // entrypoint must be the function *name*; starknet.js calls getSelectorFromName(entrypoint) internally
         const res = await provider.callContract({
           contractAddress: playerAddress,
-          entrypoint: isRegSelector,
-          calldata: [address],
+          entrypoint: 'is_registered',
+          calldata: [normalizedAddress],
         });
 
         if (cancelled) return;
 
-        const result = Array.isArray(res) ? res : (res as { result?: string[] })?.result ?? [];
-        const isReg = result.length > 0 && (result[0] === '0x1' || result[0] === '1');
+        const result = getResult(res);
+        // Cairo bool: 0 or 1 (as decimal or hex "0x0" / "0x1")
+        const raw = result[0];
+        const isReg =
+          result.length > 0 &&
+          (raw === '0x1' || raw === '1' || (raw !== undefined && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? raw : '0') !== BigInt(0)));
         setIsRegisteredOnChain(!!isReg);
 
         if (!isReg) {
@@ -74,29 +95,31 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
           return;
         }
 
-        const usernameSelector = getSelectorFromName('get_username');
         const usernameRes = await provider.callContract({
           contractAddress: playerAddress,
-          entrypoint: usernameSelector,
-          calldata: [address],
+          entrypoint: 'get_username',
+          calldata: [normalizedAddress],
         });
 
         if (cancelled) return;
 
-        const usernameResult = Array.isArray(usernameRes) ? usernameRes : (usernameRes as { result?: string[] })?.result ?? [];
+        const usernameResult = getResult(usernameRes);
         let name: string | null = null;
         if (usernameResult.length > 0 && usernameResult[0]) {
           try {
             const felt = usernameResult[0];
-            name = shortString.decodeShortString(felt.startsWith('0x') ? felt : `0x${felt}`);
-          } catch {
-            name = null;
+            const hex = felt.startsWith('0x') ? felt : `0x${felt}`;
+            if (BigInt(hex) !== BigInt(0)) name = shortString.decodeShortString(hex);
+          } catch (e) {
+            if (process.env.NODE_ENV === 'development') console.warn('[useDojoPlayerOnChain] decode username:', e);
           }
         }
         setUsernameOnChain(name);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err : new Error(String(err)));
+          const e = err instanceof Error ? err : new Error(String(err));
+          setError(e);
+          if (process.env.NODE_ENV === 'development') console.error('[useDojoPlayerOnChain]', e);
           setIsRegisteredOnChain(false);
           setUsernameOnChain(null);
         }
