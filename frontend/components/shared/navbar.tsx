@@ -18,7 +18,6 @@ import NetworkSwitcherModal from './network-switcher-modal';
 import { useStarknetWallet } from '@/context/starknet-wallet-provider';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { useOnlineUsers } from '@/hooks/useOnlineUsers';
-import { useAppAuth } from '@/hooks/useAppAuth';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
 
 const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
@@ -71,10 +70,8 @@ const NavBar = () => {
   const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
   const profileAvatar = useProfileAvatar();
 
-  const { ready, authenticated, login, logout, user } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
-  const isPrivyAuthed = ready && authenticated;
 
   const toggleSound = () => {
     if (isSoundPlaying) {
@@ -237,7 +234,7 @@ const NavBar = () => {
               Starknet
             </span>
           )}
-          {/* Wallet, guest, or Privy: wallet when connected; guest when signed in from hero; Privy sign in / signed in in nav */}
+          {/* Wallet or guest or Connect wallet */}
           {isConnected ? (
             <div className="flex items-center gap-3">
               <button
@@ -287,37 +284,12 @@ const NavBar = () => {
                 Sign out
               </button>
             </div>
-          ) : isPrivyAuthed ? (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => openConnect()}
-                className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
-              >
-                <Wallet className="w-4 h-4" />
-                Connect wallet
-              </button>
-              <button
-                type="button"
-                onClick={() => logout()}
-                className="px-4 py-2 rounded-[12px] border border-[#0E282A] hover:border-[#003B3E] bg-[#011112] text-[#00F0FF] text-xs font-dmSans"
-              >
-                {typeof user?.email === 'string' ? user.email : (user?.email as { address?: string })?.address ?? 'Signed in'} · Log out
-              </button>
-            </div>
           ) : (
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => login()}
-                className="px-4 py-2 rounded-[12px] bg-[#0FF0FC]/80 hover:bg-[#0FF0FC]/40 text-[#0D191B] font-medium transition"
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
                 onClick={() => openConnect()}
-                className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
+                className="px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2 md:flex"
               >
                 <Wallet className="w-4 h-4" />
                 Connect wallet

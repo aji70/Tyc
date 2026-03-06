@@ -12,7 +12,6 @@ import {
 } from "@/context/ContractProvider";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
-import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
 import { User as UserType } from "@/lib/types/users";
@@ -22,10 +21,8 @@ import { useUserLevel } from "@/hooks/useUserLevel";
 const HeroSectionMobile: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
-  const { ready, authenticated, login, logout, user: privyUser } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
-  const isPrivyAuthed = ready && authenticated;
 
   const [loading, setLoading] = useState(false);
   const [inputUsername, setInputUsername] = useState("");
@@ -144,18 +141,19 @@ const HeroSectionMobile: React.FC = () => {
       return "none";
     }
     if (guestUser) return "guest";
-    if (isPrivyAuthed) return "privy";
     return "disconnected";
-  }, [address, localRegistered, guestUser, isPrivyAuthed]);
+  }, [address, localRegistered, guestUser]);
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
-    if (isPrivyAuthed && privyUser) {
-      const email = typeof privyUser.email === "string" ? privyUser.email : (privyUser.email as { address?: string })?.address;
-      return email ?? "Player";
-    }
     return user?.username || localUsername || fetchedUsername || inputUsername || "Player";
-  }, [guestUser, privyUser, user, localUsername, fetchedUsername, inputUsername, isPrivyAuthed]);
+  }, [guestUser, user, localUsername, fetchedUsername, inputUsername]);
+
+  useEffect(() => {
+    if (address && user?.username && !localRegistered) {
+      setInputUsername((prev) => (prev.trim() ? prev : user!.username!.trim()));
+    }
+  }, [address, user?.username, localRegistered]);
 
   const { levelInfo } = useUserLevel({
     address: address ?? undefined,
@@ -184,12 +182,15 @@ const HeroSectionMobile: React.FC = () => {
         await registerPlayer(finalUsername);
       }
 
-      // Backend registration commented out — Starknet/Dojo: users register on-chain only (Cartridge)
-      // if (!user) {
-      //   const res = await apiClient.post<ApiResponse>("/users", { username: finalUsername, address, chain: "Starknet" });
-      //   if (!res?.success) throw new Error("Failed to save user on backend");
-      //   setUser({ username: finalUsername } as UserType);
-      // }
+      if (!user) {
+        const res = await apiClient.post<ApiResponse>("/users", {
+          username: finalUsername,
+          address,
+          chain: "Starknet",
+        });
+        if (!res?.success) throw new Error("Failed to save user on backend");
+        setUser({ username: finalUsername } as UserType);
+      }
 
       setLocalRegistered(true);
       setLocalUsername(finalUsername);
@@ -315,7 +316,7 @@ const handleContinuePrevious = () => {
 
         {/* Welcome / Loading message + Level */}
         <div className="mt-5 sm:mt-6 text-center px-2 flex flex-col items-center gap-2">
-          {(registrationStatus === "fully-registered" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
+          {(registrationStatus === "fully-registered" || registrationStatus === "guest") && !loading && (
             <>
               <p className="font-orbitron text-lg sm:text-xl font-bold text-[#00F0FF]">
                 Welcome back, {displayUsername}!
@@ -386,33 +387,11 @@ const handleContinuePrevious = () => {
             />
           )}
 
-          {/* When no wallet: Sign in (Privy) only */}
+          {/* When no wallet: Connect wallet (open via menu on mobile) */}
           {!address && registrationStatus === "disconnected" && !loading && (
             <div className="w-full max-w-[300px] flex flex-col gap-3 items-center">
-              <button
-                type="button"
-                onClick={() => login()}
-                className="relative w-full max-w-[260px] h-14 overflow-hidden rounded-xl transition-transform active:scale-[0.98]"
-              >
-                <svg
-                  className="absolute inset-0 w-full h-full"
-                  viewBox="0 0 260 56"
-                  fill="none"
-                  preserveAspectRatio="none"
-                >
-                  <path
-                    d="M10 1H250C254.373 1 256.996 6.85486 254.601 10.5127L236.167 49.5127C235.151 51.0646 233.42 52 231.565 52H10C6.96244 52 4.5 49.5376 4.5 46.5V9.5C4.5 6.46243 6.96243 4 10 4Z"
-                    fill="#00F0FF"
-                    stroke="#0E282A"
-                    strokeWidth="2"
-                  />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-[#010F10] text-base font-orbitron font-bold z-0">
-                  Sign in
-                </span>
-              </button>
               <p className="text-[#869298] text-xs text-center font-dmSans px-2">
-                Email or social · No password
+                Connect your wallet to play (use menu)
               </p>
             </div>
           )}
@@ -442,7 +421,7 @@ const handleContinuePrevious = () => {
             </button>
           )}
 
-          {(address && registrationStatus === "fully-registered") || (registrationStatus === "guest" && guestUser) || registrationStatus === "privy" ? (
+          {(address && registrationStatus === "fully-registered") || (registrationStatus === "guest" && guestUser) ? (
             <div className="w-full flex flex-col items-center gap-5">
               {/* Continue Previous Game - prominent when available, not full width */}
               {((gameCode && (contractGame?.status == 1) && (!backendGame || (backendGame.status !== "FINISHED" && backendGame.status !== "COMPLETED" && backendGame.status !== "CANCELLED"))) ||
@@ -540,12 +519,32 @@ const handleContinuePrevious = () => {
                   Challenge AI!
                 </span>
               </button>
-              {(guestUser || registrationStatus === "privy") && (
+              {guestUser && (
                 <button
-                  onClick={() => (registrationStatus === "privy" ? logout() : guestAuth?.logoutGuest())}
+                  onClick={() => guestAuth?.logoutGuest()}
                   className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs"
                 >
-                  {registrationStatus === "privy" ? "Sign out" : "Sign out (guest)"}
+                  Sign out (guest)
+                </button>
+              )}
+              {address && localRegistered && !user && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = localUsername || inputUsername.trim();
+                    if (!name) return;
+                    try {
+                      const res = await apiClient.post<ApiResponse>("/users", {
+                        username: name,
+                        address,
+                        chain: "Starknet",
+                      });
+                      if (res?.success) setUser({ username: name } as UserType);
+                    } catch (_) {}
+                  }}
+                  className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs underline underline-offset-1"
+                >
+                  Save profile to backend
                 </button>
               )}
             </div>
@@ -553,7 +552,7 @@ const handleContinuePrevious = () => {
 
           {!address && !guestUser && !isPrivyAuthed && !loading && (
             <p className="text-gray-400 text-sm text-center mt-4 px-2">
-              Sign in or connect your wallet (menu) to play.
+              Connect your wallet (menu) to play.
             </p>
           )}
         </div>

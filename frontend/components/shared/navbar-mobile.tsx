@@ -18,7 +18,6 @@ import NetworkSwitcherModal from './network-switcher-modal';
 import { useGetUsername } from '@/context/ContractProvider';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { isAddress } from 'viem';
-import { useAppAuth } from '@/hooks/useAppAuth';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
 
 const SCROLL_TOP_THRESHOLD = 40;
@@ -78,10 +77,8 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
   const { account: address, connectors, connectWallet } = useStarknetWallet();
   const { chain } = useNetwork();
   const isConnected = !!address;
-  const { ready, authenticated, login, logout, user } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
-  const isPrivyAuthed = ready && authenticated;
 
   const networkDisplay = chain?.name ?? 'Starknet';
   const openConnect = () => connectors[0] && connectWallet(connectors[0]);
@@ -214,7 +211,7 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
 
               {/* Wallet Section - HUD card (wallet or Privy signed in) */}
               <div className="mb-6 space-y-4">
-                {(isConnected || isPrivyAuthed || guestUser) && (
+                {(isConnected || guestUser) && (
                   <div className="p-4 rounded-xl bg-gradient-to-br from-[#022a2c]/90 to-[#011112] border border-[#00F0FF]/20 shadow-[0_4px_16px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(0,240,255,0.06)] flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-11 w-11 rounded-lg border-2 border-[#00F0FF]/40 overflow-hidden shadow-[0_0_12px_rgba(0,240,255,0.15)] shrink-0 ring-1 ring-[#00F0FF]/10">
@@ -225,7 +222,7 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
                         )}
                       </div>
                       <span className="text-[#00F0FF] font-orbitron font-semibold text-base tracking-wide">
-                        {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : guestUser ? `Guest: ${guestUser.username}` : (typeof user?.email === 'string' ? user?.email : (user?.email as { address?: string })?.address) ?? 'Signed in'}
+                        {address ? `${address.slice(0, 6)}…${address.slice(-4)}` : guestUser ? `Guest: ${guestUser.username}` : ''}
                       </span>
                     </div>
                   </div>
@@ -289,7 +286,7 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
                   Tournaments
                 </Link>
 
-                {(isConnected || isPrivyAuthed || guestUser) && (
+                {(isConnected || guestUser) && (
                   <>
                     <Link
                       href="/profile"
@@ -353,25 +350,15 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
                       >
                         Guest: {guestUser.username} · Sign out
                       </button>
-                    ) : isPrivyAuthed ? (
-                      <button
-                        onClick={() => {
-                          logout();
-                          closeMobileMenu();
-                        }}
-                        className="w-full py-4 rounded-xl bg-[#011112]/80 hover:bg-[#022a2c]/80 border border-[#003B3E]/60 text-[#00F0FF] font-orbitron font-medium transition-all duration-200"
-                      >
-                        {typeof user?.email === 'string' ? user.email : (user?.email as { address?: string })?.address ?? 'Signed in'} · Log out
-                      </button>
                     ) : (
                       <button
                         onClick={() => {
-                          login();
+                          openConnect();
                           closeMobileMenu();
                         }}
                         className="w-full py-4 rounded-xl bg-gradient-to-r from-[#00F0FF]/25 to-[#0FF0FC]/20 border border-[#00F0FF]/50 text-[#00F0FF] font-orbitron font-bold text-lg tracking-wide hover:from-[#00F0FF]/35 hover:to-[#0FF0FC]/28 hover:shadow-[0_0_24px_rgba(0,240,255,0.2)] hover:border-[#00F0FF]/60 active:scale-[0.99] transition-all duration-200"
                       >
-                        Sign in
+                        Connect wallet
                       </button>
                     )}
                   </div>

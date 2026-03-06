@@ -13,7 +13,6 @@ import {
 } from "@/context/ContractProvider";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
-import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
 import { User as UserType } from "@/lib/types/users";
@@ -24,11 +23,9 @@ const HeroSection: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
   const { connectors, connectWallet } = useStarknetWallet();
-  const { ready, authenticated, login, logout, user: privyUser } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const guestUser = guestAuth?.guestUser ?? null;
-  const isPrivyAuthed = ready && authenticated;
 
   const [loading, setLoading] = useState(false);
   const [inputUsername, setInputUsername] = useState("");
@@ -148,29 +145,24 @@ const HeroSection: React.FC = () => {
 
   const registrationStatus = useMemo(() => {
     if (address) {
-      // Starknet/Dojo: on-chain only; no backend registration
       if (localRegistered) return "fully-registered";
       return "none";
     }
     if (guestUser) return "guest";
-    if (isPrivyAuthed) return "privy";
     return "disconnected";
-  }, [address, localRegistered, guestUser, isPrivyAuthed]);
+  }, [address, localRegistered, guestUser]);
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
-    if (isPrivyAuthed && privyUser) {
-      const email = typeof privyUser.email === "string" ? privyUser.email : (privyUser.email as { address?: string })?.address;
-      return email ?? "Player";
+    return user?.username || localUsername || fetchedUsername || inputUsername || "Player";
+  }, [guestUser, user, localUsername, fetchedUsername, inputUsername]);
+
+  // Not on contract: if backend has user, prefill username once
+  useEffect(() => {
+    if (address && user?.username && !localRegistered) {
+      setInputUsername((prev) => (prev.trim() ? prev : user!.username!.trim()));
     }
-    return (
-      user?.username ||
-      localUsername ||
-      fetchedUsername ||
-      inputUsername ||
-      "Player"
-    );
-  }, [guestUser, privyUser, user, localUsername, fetchedUsername, inputUsername, isPrivyAuthed]);
+  }, [address, user?.username, localRegistered]);
 
   const { levelInfo } = useUserLevel({
     address: address ?? undefined,
@@ -196,21 +188,19 @@ const HeroSection: React.FC = () => {
     const toastId = toast.loading("Processing registration...");
 
     try {
-      // Starknet/Dojo: register on-chain only (Cartridge wallet → Dojo player system)
       if (!localRegistered) {
         await registerPlayer(finalUsername);
       }
 
-      // Backend registration commented out — Starknet/Dojo project: users register on-chain only
-      // if (!user) {
-      //   const res = await apiClient.post<ApiResponse>("/users", {
-      //     username: finalUsername,
-      //     address,
-      //     chain: "Starknet",
-      //   });
-      //   if (!res?.success) throw new Error("Failed to save user on backend");
-      //   setUser({ username: finalUsername } as UserType);
-      // }
+      if (!user) {
+        const res = await apiClient.post<ApiResponse>("/users", {
+          username: finalUsername,
+          address,
+          chain: "Starknet",
+        });
+        if (!res?.success) throw new Error("Failed to save user on backend");
+        setUser({ username: finalUsername } as UserType);
+      }
 
       // Optimistic updates
       setLocalRegistered(true);
@@ -337,7 +327,7 @@ const handleContinuePrevious = () => {
 
       <main className="w-full h-full absolute top-0 left-0 z-2 bg-transparent flex flex-col lg:justify-center items-center gap-1">
         {/* Welcome Message + Level */}
-        {(registrationStatus === "fully-registered" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
+        {(registrationStatus === "fully-registered" || registrationStatus === "guest") && !loading && (
           <div className="mt-20 md:mt-28 lg:mt-0 flex flex-col items-center gap-2">
             <p className="font-orbitron lg:text-[24px] md:text-[20px] text-[16px] font-[700] text-[#00F0FF] text-center">
               Welcome back, {displayUsername}!
@@ -443,45 +433,19 @@ const handleContinuePrevious = () => {
             />
           )}
 
-          {/* When no wallet: Sign in (Privy) + Connect wallet (desktop) */}
+          {/* When no wallet: Connect wallet only */}
           {!address && registrationStatus === "disconnected" && !loading && (
             <div className="w-[80%] md:w-[400px] flex flex-col gap-4 items-center">
-              <div className="w-full flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
-                <button
-                  type="button"
-                  onClick={() => login()}
-                  className="relative group w-full sm:w-auto min-w-[200px] h-[52px] px-8 bg-transparent border-none p-0 overflow-hidden cursor-pointer transition-transform group-hover:scale-[1.02]"
-                >
-                  <svg
-                    width="220"
-                    height="52"
-                    viewBox="0 0 220 52"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full max-w-[220px] transform scale-x-[-1]"
-                  >
-                    <path
-                      d="M10 1H210C214.373 1 216.996 6.85486 214.601 10.5127L196.167 49.5127C195.151 51.0646 193.42 52 191.565 52H10C6.96244 52 4.5 49.5376 4.5 46.5V9.5C4.5 6.46243 6.96243 4 10 4Z"
-                      fill="#00F0FF"
-                      stroke="#0E282A"
-                      strokeWidth={2}
-                    />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-[#010F10] text-[16px] font-orbitron font-[700] z-2">
-                    Sign in
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openConnect()}
-                  className="hidden md:flex relative group w-full sm:w-auto min-w-[200px] h-[52px] px-8 items-center justify-center rounded-xl border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-[16px] font-[700] hover:border-[#00F0FF]/50 hover:bg-[#0E1415]/90 transition-all cursor-pointer"
-                >
-                  <Wallet className="w-5 h-5 mr-2" />
-                  Connect wallet
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => openConnect()}
+                className="relative group w-full sm:w-auto min-w-[200px] h-[52px] px-8 flex items-center justify-center rounded-xl border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-[16px] font-[700] hover:border-[#00F0FF]/50 hover:bg-[#0E1415]/90 transition-all cursor-pointer"
+              >
+                <Wallet className="w-5 h-5 mr-2" />
+                Connect wallet
+              </button>
               <p className="text-[#869298] text-xs text-center font-dmSans">
-                Sign in with email or social · No password
+                Connect your wallet to play
               </p>
             </div>
           )}
@@ -518,8 +482,8 @@ const handleContinuePrevious = () => {
             </button>
           )}
 
-          {/* Action buttons: wallet registered, guest, or Privy */}
-          {(address && registrationStatus === "fully-registered") || (registrationStatus === "guest" && guestUser) || registrationStatus === "privy" ? (
+          {/* Action buttons: wallet registered or guest */}
+          {(address && registrationStatus === "fully-registered") || (registrationStatus === "guest" && guestUser) ? (
             <div className="flex flex-wrap justify-center items-center gap-4">
               {/* Continue Previous Game - Highlighted (wallet: from contract; guest: from my-games) */}
               {((address && gameCode && (contractGame?.status == 1) && (!backendGame || (backendGame.status !== "FINISHED" && backendGame.status !== "COMPLETED" && backendGame.status !== "CANCELLED"))) ||
@@ -604,12 +568,34 @@ const handleContinuePrevious = () => {
                 </span>
               </button>
 
-              {(guestUser || registrationStatus === "privy") && (
+              {guestUser && (
                 <button
-                  onClick={() => (registrationStatus === "privy" ? logout() : guestAuth?.logoutGuest())}
+                  onClick={() => guestAuth?.logoutGuest()}
                   className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs"
                 >
-                  {registrationStatus === "privy" ? "Sign out" : "Sign out (guest)"}
+                  Sign out (guest)
+                </button>
+              )}
+
+              {/* Discreet: on contract but not on backend — prompt to save profile */}
+              {address && localRegistered && !user && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = localUsername || inputUsername.trim();
+                    if (!name) return;
+                    try {
+                      const res = await apiClient.post<ApiResponse>("/users", {
+                        username: name,
+                        address,
+                        chain: "Starknet",
+                      });
+                      if (res?.success) setUser({ username: name } as UserType);
+                    } catch (_) {}
+                  }}
+                  className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs underline underline-offset-1"
+                >
+                  Save profile to backend
                 </button>
               )}
 
@@ -640,9 +626,9 @@ const handleContinuePrevious = () => {
             </div>
           ) : null}
 
-          {!address && !guestUser && !isPrivyAuthed && (
+          {!address && !guestUser && (
             <p className="text-gray-400 text-sm text-center mt-4">
-              Sign in or connect your wallet to play.
+              Connect your wallet to play.
             </p>
           )}
         </div>
