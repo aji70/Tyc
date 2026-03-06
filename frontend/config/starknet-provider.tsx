@@ -2,10 +2,30 @@
 
 import React from 'react';
 import { sepolia, mainnet } from '@starknet-react/chains';
-import { StarknetConfig, jsonRpcProvider, cartridge } from '@starknet-react/core';
+import {
+  StarknetConfig,
+  jsonRpcProvider,
+  cartridge,
+  InjectedConnector,
+} from '@starknet-react/core';
 import { ControllerConnector } from '@cartridge/connector';
 import { constants } from 'starknet';
 import { TYCOON_SESSION_POLICIES } from '@/constants/sessionPolicies';
+
+// Ensure every InjectedConnector (including ControllerConnector) has externalDetectWallets
+const noop = function externalDetectWallets() {};
+if (
+  typeof InjectedConnector !== 'undefined' &&
+  InjectedConnector.prototype &&
+  typeof (InjectedConnector.prototype as unknown as Record<string, unknown>)
+    .externalDetectWallets !== 'function'
+) {
+  Object.defineProperty(InjectedConnector.prototype, 'externalDetectWallets', {
+    value: noop,
+    writable: true,
+    configurable: true,
+  });
+}
 
 const cartridgeConnector = new ControllerConnector({
   defaultChainId: constants.StarknetChainId.SN_SEPOLIA,
@@ -25,9 +45,8 @@ const cartridgeConnector = new ControllerConnector({
   policies: TYCOON_SESSION_POLICIES,
 });
 
-// Fix: some Cartridge/wallet code expects this; avoid "externalDetectWallets is not a function"
 (cartridgeConnector as unknown as Record<string, unknown>).externalDetectWallets =
-  function externalDetectWallets() {};
+  noop;
 
 export function StarknetProvider({ children }: { children: React.ReactNode }) {
   const provider = jsonRpcProvider({
