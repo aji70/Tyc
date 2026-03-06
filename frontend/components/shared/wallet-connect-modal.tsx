@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { X } from "lucide-react";
-import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import AnimationWrapper from "@/animation/animation-wrapper";
 
 interface WalletConnectModalProps {
@@ -15,13 +15,14 @@ export default function WalletConnectModal({
   isOpen,
   onClose,
 }: WalletConnectModalProps) {
-  const { open } = useAppKit();
-  const { isConnected } = useAppKitAccount();
+  const { account, connectors, connectWallet } = useStarknetWallet();
+  const isConnected = !!account;
 
   const handleConfirm = async () => {
     try {
-      await open(); // 🔥 Directly open Reown's wallet connection modal
-      onClose(); // Close your modal afterwards
+      const connector = connectors[0]; // Cartridge Controller
+      if (connector) connectWallet(connector);
+      onClose();
     } catch (err) {
       console.error("Wallet connection failed:", err);
     }
@@ -94,7 +95,7 @@ export default function WalletConnectModal({
                 onClick={handleConfirm}
                 className="w-full py-3 rounded-[12px] font-medium transition-colors bg-[#0FF0FC]/80 hover:bg-[#0FF0FC]/40 text-[#0D191B]"
               >
-                Connect
+                Connect with Cartridge
               </button>
             </AnimationWrapper>
           </motion.div>

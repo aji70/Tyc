@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { useAccount } from "@starknet-react/core";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { X, Wallet, Gamepad2, Dices, Sparkles } from "lucide-react";
 
@@ -25,11 +25,12 @@ interface OnboardingModalProps {
 
 export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
-  const { open: openAppKit } = useAppKit();
+  const { address } = useAccount();
+  const { connectors, connectWallet } = useStarknetWallet();
   const { ready, authenticated, login } = useAppAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  const isConnected = !!address;
 
   useEffect(() => {
     if (hasSeenOnboarding()) return;
@@ -46,7 +47,8 @@ export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
     if (ready && !authenticated) {
       login();
     } else {
-      openAppKit?.();
+      const connector = connectors[0];
+      if (connector) connectWallet(connector);
     }
   };
 

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Dices, Gamepad2 } from "lucide-react";
 import { TypeAnimation } from "react-type-animation";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import {
   useIsRegistered,
   useGetUsername,

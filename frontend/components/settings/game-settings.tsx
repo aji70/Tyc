@@ -16,12 +16,8 @@ import { RiAuctionFill } from "react-icons/ri";
 import { GiBank, GiPrisoner } from "react-icons/gi";
 import { IoBuild } from "react-icons/io5";
 import { useRouter } from "next/navigation";
-import {
-  useAccount,
-  useChainId,
-  useReadContract,
-} from 'wagmi';
-import { useAppKitNetwork } from '@reown/appkit/react';
+import { useReadContract } from 'wagmi';
+import { useAccount as useStarknetAccount, useNetwork } from '@starknet-react/core';
 import { toast } from "react-toastify";
 import { generateGameCode } from "@/lib/utils/games";
 import { GamePieces } from "@/lib/constants/games";
@@ -57,17 +53,16 @@ interface GameSettingsProps {
 
 export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }: GameSettingsProps = {}) {
   const router = useRouter();
-  const { address } = useAccount();
-  const wagmiChainId = useChainId();
-  const { caipNetwork } = useAppKitNetwork();
+  const { address } = useStarknetAccount();
+  const { chain } = useNetwork();
   const guestAuth = useGuestAuthOptional();
   const isGuest = !!guestAuth?.guestUser;
 
-  const { data: username } = useGetUsername(address);
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address);
+  const { data: username } = useGetUsername(address as `0x${string}` | undefined);
+  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address as `0x${string}` | undefined);
 
-  const isMiniPay = MINIPAY_CHAIN_IDS.includes(wagmiChainId);
-  const chainName = caipNetwork?.name?.toLowerCase().replace(" ", "") || `chain-${wagmiChainId}` || "unknown";
+  const isMiniPay = false;
+  const chainName = chain?.name?.toLowerCase().replace(" ", "") || "starknet";
 
   const [isFreeGame, setIsFreeGame] = useState(false);
 
@@ -87,8 +82,9 @@ export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }
   const [customStake, setCustomStake] = useState<string>("");
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const contractAddress = TYCOON_CONTRACT_ADDRESSES[wagmiChainId as keyof typeof TYCOON_CONTRACT_ADDRESSES] as Address | undefined;
-  const usdcTokenAddress = USDC_TOKEN_ADDRESS[wagmiChainId as keyof typeof USDC_TOKEN_ADDRESS] as Address | undefined;
+  // Starknet: EVM contract addresses not used; use Dojo for game creation
+  const contractAddress = undefined as Address | undefined;
+  const usdcTokenAddress = undefined as Address | undefined;
 
   const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
     address: usdcTokenAddress,

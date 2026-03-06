@@ -5,7 +5,6 @@ import "@/styles/globals.css";
 import { getMetadata } from "@/utils/getMeatadata";
 import { headers } from "next/headers";
 import ContextProvider from "@/context";
-import AppKitProviderWrapper from "@/components/AppKitProviderWrapper";
 import { TycoonProvider } from "@/context/ContractProvider";
 import { GuestAuthProvider } from "@/context/GuestAuthContext";
 import { ToastContainer } from "react-toastify";
@@ -92,12 +91,8 @@ export default async function RootLayout({
             <TycoonProvider>
               <GuestAuthProvider>
                 <TournamentProvider>
-                  <AppKitProviderWrapper>
-                    {/* SocketProvider commented out as in your code */}
-                    {/* <SocketProvider serverUrl="https://base-monopoly-production.up.railway.app/api"> */}
-
-                    {/* ← Use the client wrapper here—no more useMediaQuery! */}
-                    <QueryProvider>
+                  {/* Wallet connect: Cartridge Controller (Starknet) via LayoutBody's StarknetProvider */}
+                  <QueryProvider>
                       <BfcacheReloadGuard />
                       <ClientLayout cookies={cookies}>
                         {children}
@@ -123,10 +118,7 @@ export default async function RootLayout({
                         }}
                       />
                       <Toaster position="top-center" />
-                    </QueryProvider>
-
-                    {/* </SocketProvider> */}
-                  </AppKitProviderWrapper>
+                  </QueryProvider>
                 </TournamentProvider>
               </GuestAuthProvider>
             </TycoonProvider>

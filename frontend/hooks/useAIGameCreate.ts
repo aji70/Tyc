@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useAppKitNetwork } from "@reown/appkit/react";
+import { useAccount } from "@starknet-react/core";
+import { useNetwork } from "@starknet-react/core";
 import { toast } from "react-toastify";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { generateGameCode } from "@/lib/utils/games";
@@ -72,27 +72,24 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
   const { address } = useAccount();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const redirectTo3D = options?.redirectTo3D ?? false;
-  const { caipNetwork } = useAppKitNetwork();
+  const { chain } = useNetwork();
   const board3DUrl = redirectTo3D ? (isMobile ? `/board-3d-mobile?gameCode=` : `/board-3d?gameCode=`) : null;
   const guestAuth = useGuestAuthOptional();
   const isGuest = !!guestAuth?.guestUser;
 
-  const { data: username } = useGetUsername(address);
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address);
+  const { data: username } = useGetUsername(address as `0x${string}` | undefined);
+  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address as `0x${string}` | undefined);
   const { agents: registeredAgents, isLoading: agentsLoading, isSupported: registrySupported } =
     useRegisteredAIAgents();
 
-  const isMiniPay = !!caipNetwork?.id && MINIPAY_CHAIN_IDS.includes(Number(caipNetwork.id));
-  const chainName =
-    caipNetwork?.name?.toLowerCase().replace(" ", "") || `chain-${caipNetwork?.id ?? "unknown"}`;
+  const isMiniPay = false; // Starknet: no MiniPay chain
+  const chainName = chain?.name?.toLowerCase().replace(" ", "") || "starknet";
 
   const [settings, setSettings] = useState<AIGameSettings>(DEFAULT_SETTINGS);
 
   const gameCode = generateGameCode();
   const totalPlayers = settings.aiCount + 1;
-  const contractAddress = TYCOON_CONTRACT_ADDRESSES[
-    caipNetwork?.id as keyof typeof TYCOON_CONTRACT_ADDRESSES
-  ] as Address | undefined;
+  const contractAddress = undefined; // Starknet: use Dojo world; EVM addresses not used
 
   const { write: createAiGame, isPending: isCreatePending } = useCreateAIGame(
     username || "",

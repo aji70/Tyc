@@ -1,10 +1,17 @@
+'use client';
+
 /**
- * Wrapper used by root layout. Default: passthrough (no Dojo/Starknet) so the build
- * succeeds (Dojo's torii-wasm can trigger webpack WASM parse errors on some setups).
- * To enable Starknet/Dojo: in layout.tsx use StarknetDojoProviders instead of LayoutBody.
+ * Wraps the app with Starknet + Cartridge Controller for wallet connect.
+ * Dojo SDK is not included here (use StarknetDojoProviders to add it) to avoid torii-wasm build issues.
  */
 import { ReactNode } from "react";
+import { StarknetProvider } from "@/config/starknet-provider";
+import { StarknetWalletProvider } from "@/context/starknet-wallet-provider";
 
 export function LayoutBody({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  return (
+    <StarknetProvider>
+      <StarknetWalletProvider>{children}</StarknetWalletProvider>
+    </StarknetProvider>
+  );
 }

@@ -8,13 +8,14 @@ import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { House, Volume2, VolumeOff, User, ShoppingBag, Trophy, Globe, Swords, MessageCircle, Wallet, BookOpen } from 'lucide-react';
 import useSound from 'use-sound';
-import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
+import { useNetwork } from '@starknet-react/core';
 import { PiUserCircle } from 'react-icons/pi';
 import Image from 'next/image';
 import avatar from '@/public/avatar.jpg';
 import WalletConnectModal from './wallet-connect-modal';
 import WalletDisconnectModal from './wallet-disconnect-modal';
 import NetworkSwitcherModal from './network-switcher-modal';
+import { useStarknetWallet } from '@/context/starknet-wallet-provider';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 import { useAppAuth } from '@/hooks/useAppAuth';
@@ -38,10 +39,12 @@ const NavBar = () => {
     restDelta: 0.001,
   });
 
-  const { open } = useAppKit();
-  const { address, isConnected } = useAppKitAccount();
-  const { caipNetwork, chainId } = useAppKitNetwork();
+  const { account: address, connectors, connectWallet, disconnectWallet } = useStarknetWallet();
+  const { chain } = useNetwork();
+  const isConnected = !!address;
   const { onlineCount, onlineUsers } = useOnlineUsers(isConnected ? address : undefined);
+
+  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const [onlineDropdownOpen, setOnlineDropdownOpen] = useState(false);
   const onlineDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -55,8 +58,7 @@ const NavBar = () => {
     return () => document.removeEventListener('click', close);
   }, []);
 
-  // Prioritize shortName if available (e.g., "Ethereum"), fall back to name, then chain ID
-  const networkDisplay =  caipNetwork?.name ?? (chainId ? `Chain ${chainId}` : 'Network');
+  const networkDisplay = chain?.name ?? 'Starknet';
 
   const [isSoundPlaying, setIsSoundPlaying] = useState(false);
   const [play, { pause }] = useSound('/sound/monopoly-theme.mp3', {
@@ -261,7 +263,7 @@ const NavBar = () => {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => open()}
+                onClick={() => openConnect()}
                 className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
               >
                 <Wallet className="w-4 h-4" />
@@ -282,7 +284,7 @@ const NavBar = () => {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => open()}
+                onClick={() => openConnect()}
                 className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
               >
                 <Wallet className="w-4 h-4" />
@@ -307,7 +309,7 @@ const NavBar = () => {
               </button>
               <button
                 type="button"
-                onClick={() => open()}
+                onClick={() => openConnect()}
                 className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
               >
                 <Wallet className="w-4 h-4" />

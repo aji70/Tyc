@@ -8,10 +8,9 @@ import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { House, Volume2, VolumeOff, Globe, Menu, X, User, ShoppingBag, Trophy, Swords, BookOpen } from 'lucide-react';
 import useSound from 'use-sound';
-import { useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
-import { useConnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useNetwork } from '@starknet-react/core';
 import Image from 'next/image';
+import { useStarknetWallet } from '@/context/starknet-wallet-provider';
 import avatar from '@/public/avatar.jpg';
 import WalletConnectModal from './wallet-connect-modal';
 import WalletDisconnectModal from './wallet-disconnect-modal';
@@ -76,15 +75,16 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
     return () => unsubscribe();
   }, [scrollY, minimal]);
 
-  const { address, isConnected } = useAppKitAccount();
-  const { caipNetwork, chainId } = useAppKitNetwork();
-  const { connect } = useConnect();
+  const { account: address, connectors, connectWallet } = useStarknetWallet();
+  const { chain } = useNetwork();
+  const isConnected = !!address;
   const { ready, authenticated, login, logout, user } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
   const isPrivyAuthed = ready && authenticated;
 
-  const networkDisplay = caipNetwork?.name ?? (chainId ? `Chain ${chainId}` : '—');
+  const networkDisplay = chain?.name ?? 'Starknet';
+  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
 
   const [isSoundPlaying, setIsSoundPlaying] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -106,22 +106,11 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
     return () => window.clearTimeout(t);
   }, [router]);
 
-const safeAddress = address && isAddress(address) 
-  ? address as `0x${string}` 
-  : undefined;
-
-const { data: fetchedUsername } = useGetUsername(safeAddress);
+  const safeAddress = address && isAddress(address)
+    ? (address as `0x${string}`)
+    : undefined;
+  const { data: fetchedUsername } = useGetUsername(safeAddress);
   const profileAvatar = useProfileAvatar();
-
-  // MiniPay detection + auto-connect attempt
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.ethereum?.isMiniPay) {
-      setIsMiniPay(true);
-      if (!isConnected) {
-        connect({ connector: injected() });
-      }
-    }
-  }, [connect, isConnected]);
 
   const toggleSound = () => {
     if (isSoundPlaying) {

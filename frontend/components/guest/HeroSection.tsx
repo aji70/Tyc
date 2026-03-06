@@ -5,8 +5,8 @@ import Image from "next/image";
 import { Dices, Gamepad2, Wallet } from "lucide-react";
 import { TypeAnimation } from "react-type-animation";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { useAccount } from "@starknet-react/core";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import {
   useIsRegistered,
   useGetUsername,
@@ -25,9 +25,10 @@ import { useUserLevel } from "@/hooks/useUserLevel";
 const HeroSection: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
+  const { connectors, connectWallet } = useStarknetWallet();
   const { ready, authenticated, login, logout, user: privyUser } = useAppAuth();
-  const { open: openAppKit } = useAppKit();
   const guestAuth = useGuestAuthOptional();
+  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const guestUser = guestAuth?.guestUser ?? null;
   const isPrivyAuthed = ready && authenticated;
 
@@ -484,7 +485,7 @@ const handleContinuePrevious = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => openAppKit()}
+                  onClick={() => openConnect()}
                   className="hidden md:flex relative group w-full sm:w-auto min-w-[200px] h-[52px] px-8 items-center justify-center rounded-xl border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-[16px] font-[700] hover:border-[#00F0FF]/50 hover:bg-[#0E1415]/90 transition-all cursor-pointer"
                 >
                   <Wallet className="w-5 h-5 mr-2" />

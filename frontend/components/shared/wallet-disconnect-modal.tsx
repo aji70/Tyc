@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { X } from "lucide-react";
-import { useDisconnect } from "@reown/appkit/react";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import AnimationWrapper from "@/animation/animation-wrapper";
 
 interface WalletDisconnectModalProps {
@@ -14,15 +14,14 @@ export default function WalletDisconnectModal({
   isOpen,
   onClose,
 }: WalletDisconnectModalProps) {
-  const { disconnect } = useDisconnect(); // Use the correct hook
+  const { disconnectWallet } = useStarknetWallet();
 
   const handleDisconnect = async () => {
     try {
-      await disconnect(); // Properly disconnect the wallet
+      disconnectWallet();
       onClose();
     } catch (err) {
       console.error("Wallet disconnection failed:", err);
-      // Keep modal open so user can try again or cancel
     }
   };
 

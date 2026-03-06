@@ -21,7 +21,7 @@ import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { socketService } from "@/lib/socket";
 import { useGetGameByCode, useRewardBurnCollectible } from "@/context/ContractProvider";
 import { useChainId } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import { showWrongNetworkClaimToast } from "@/lib/utils/wrongNetworkClaimToast";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { useGameTrades } from "@/hooks/useGameTrades";
@@ -422,7 +422,8 @@ function Board3DPageContent() {
   const CELO_CHAIN_ID = 42220;
   const { data: contractGame } = useGetGameByCode(game?.code ?? "");
   const chainId = useChainId();
-  const { open: openAppKit } = useAppKit();
+  const { connectors, connectWallet } = useStarknetWallet();
+  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const { tradeRequests: incomingTrades } = useGameTrades({
     gameId: game?.id,
     myUserId: me?.user_id,

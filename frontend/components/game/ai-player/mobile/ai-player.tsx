@@ -15,7 +15,7 @@ import { useAiPlayerLogic } from "../useAiPlayerLogic";
 import { isAIPlayer } from "@/utils/gameUtils";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { useChainId } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import { showWrongNetworkClaimToast } from "@/lib/utils/wrongNetworkClaimToast";
 
 interface GamePlayersProps {
@@ -108,7 +108,8 @@ export default function MobileGamePlayers({
   } = logic;
 
   const chainId = useChainId();
-  const { open: openAppKit } = useAppKit();
+  const { connectors, connectWallet } = useStarknetWallet();
+  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const CELO_CHAIN_ID = 42220;
 
   const totalActiveTrades = openTrades.length + tradeRequests.length;
