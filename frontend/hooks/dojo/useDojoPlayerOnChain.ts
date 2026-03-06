@@ -379,9 +379,20 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
             return;
           } catch (err) {
             lastErr = err instanceof Error ? err : new Error(String(err));
-            if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-              console.warn('[useDojoPlayerOnChain] RPC failed:', rpcUrl, lastErr.message);
-            }
+            const raw =
+              err && typeof err === 'object'
+                ? {
+                    message: (err as Error).message,
+                    cause: (err as Error & { cause?: unknown }).cause,
+                    ...(typeof (err as Record<string, unknown>).response !== 'undefined' && {
+                      response: (err as Record<string, unknown>).response,
+                    }),
+                    ...(typeof (err as Record<string, unknown>).body !== 'undefined' && {
+                      body: (err as Record<string, unknown>).body,
+                    }),
+                  }
+                : err;
+            console.warn('[useDojoPlayerOnChain] RPC failed:', rpcUrl, raw);
           }
         }
 
