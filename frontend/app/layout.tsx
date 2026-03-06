@@ -36,7 +36,7 @@ const BFCACHE_RELOAD_SCRIPT = `
 `;
 
 // Prevents "externalDetectWallets is not a function" when Cartridge/wallet code expects it on window
-// or on the injected wallet object (e.g. window.starknet_*). Patches window and any existing/late-injected wallets.
+// or on the injected wallet object. Run first in head; keep patching for 15s to catch late-injected wallets.
 const EXTERNAL_DETECT_WALLETS_SHIM = `
 (function(){
   if (typeof window === 'undefined') return;
@@ -45,21 +45,30 @@ const EXTERNAL_DETECT_WALLETS_SHIM = `
     try { Object.defineProperty(window, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); }
     catch (e) { window.externalDetectWallets = noop; }
   }
-  function patchWallet(obj) {
+  function patch(obj) {
     if (obj && typeof obj === 'object' && typeof obj.externalDetectWallets !== 'function') {
       try { obj.externalDetectWallets = noop; } catch (e) {}
     }
   }
   function patchAll() {
     try {
-      if (window.starknet) patchWallet(window.starknet);
-      for (var key in window) {
-        if (key.indexOf('starknet_') === 0 && window[key]) patchWallet(window[key]);
+      patch(window.starknet);
+      for (var k in window) {
+        if (k.indexOf('starknet_') === 0 && window[k]) patch(window[k]);
+      }
+      if (window.starknet && typeof window.starknet === 'object') {
+        var arr = window.starknet;
+        if (Array.isArray(arr)) for (var i = 0; i < arr.length; i++) patch(arr[i]);
       }
     } catch (e) {}
   }
   patchAll();
-  var t = 0, id = setInterval(function() { patchAll(); if (++t >= 20) clearInterval(id); }, 100);
+  var count = 0;
+  var id = setInterval(function() { patchAll(); if (++count >= 75) clearInterval(id); }, 200);
+  if (document.readyState !== 'complete') {
+    window.addEventListener('load', function() { patchAll(); });
+  }
+  document.addEventListener('visibilitychange', function() { if (document.visibilityState === 'visible') patchAll(); });
 })();
 `;
 
@@ -106,6 +115,8 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Run first so Cartridge/injected wallets get externalDetectWallets before any other script */}
+        <script dangerouslySetInnerHTML={{ __html: EXTERNAL_DETECT_WALLETS_SHIM }} />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,100..1000&family=Krona+One&family=Orbitron:wght@400;500;700&display=swap"
@@ -113,7 +124,7 @@ export default async function RootLayout({
       </head>
       <body className="antialiased bg-[#010F10] w-full">
         <Script id="bfcache-reload" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: BFCACHE_RELOAD_SCRIPT }} />
-        <Script id="external-detect-wallets-shim" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: EXTERNAL_DETECT_WALLETS_SHIM }} />
+        <Script id="external-detect-wallets-shim-body" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: EXTERNAL_DETECT_WALLETS_SHIM }} />
         <FarcasterReady />
         <ContextProvider cookies={cookies}>
           <LayoutBody>

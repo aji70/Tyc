@@ -7,25 +7,22 @@ import {
   jsonRpcProvider,
   cartridge,
   InjectedConnector,
+  Connector,
 } from '@starknet-react/core';
 import { ControllerConnector } from '@cartridge/connector';
 import { constants } from 'starknet';
 import { TYCOON_SESSION_POLICIES } from '@/constants/sessionPolicies';
 
-// Ensure every InjectedConnector (including ControllerConnector) has externalDetectWallets
+// Ensure every Connector (base + InjectedConnector) has externalDetectWallets so no caller throws
 const noop = function externalDetectWallets() {};
-if (
-  typeof InjectedConnector !== 'undefined' &&
-  InjectedConnector.prototype &&
-  typeof (InjectedConnector.prototype as unknown as Record<string, unknown>)
-    .externalDetectWallets !== 'function'
-) {
-  Object.defineProperty(InjectedConnector.prototype, 'externalDetectWallets', {
-    value: noop,
-    writable: true,
-    configurable: true,
-  });
-}
+const patchProto = (proto: object) => {
+  if (!proto || typeof (proto as Record<string, unknown>).externalDetectWallets === 'function') return;
+  try {
+    Object.defineProperty(proto, 'externalDetectWallets', { value: noop, writable: true, configurable: true });
+  } catch (_) {}
+};
+if (typeof Connector !== 'undefined' && Connector.prototype) patchProto(Connector.prototype);
+if (typeof InjectedConnector !== 'undefined' && InjectedConnector.prototype) patchProto(InjectedConnector.prototype);
 
 const cartridgeConnector = new ControllerConnector({
   defaultChainId: constants.StarknetChainId.SN_SEPOLIA,
