@@ -10,6 +10,7 @@ import JoinOurCommunity from "@/components/guest/JoinOurCommunity";
 import Footer from "@/components/shared/Footer";
 export default function HomeClient() {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  
 
   return (
     <main className="w-full">
