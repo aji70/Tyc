@@ -18,12 +18,11 @@ const RPC_CALL_MS = 15_000;
  * set NEXT_PUBLIC_STARKNET_READ_RPC_URL to a full RPC (e.g. https://starknet-sepolia.public.blastapi.io).
  */
 
-/** RPCs that support starknet_call (view). Cartridge gateway often does not; try these first. */
-const SEPOLIA_READ_RPC_URLS = [
+/** Fallback RPCs for starknet_call. Note: from browser (e.g. Vercel) many public RPCs block CORS; app RPC is tried first. */
+const SEPOLIA_READ_RPC_FALLBACKS = [
   'https://starknet-sepolia.public.blastapi.io',
   'https://starknet-sepolia.drpc.org',
   'https://starknet-sepolia-rpc.publicnode.com',
-  'https://api.cartridge.gg/x/starknet/sepolia',
 ];
 
 /** ABI for Player system view functions. Use simple types so starknet.js encodes calldata correctly. */
@@ -255,7 +254,12 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     const envReadRpc =
       typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_STARKNET_READ_RPC_URL : undefined;
     const readRpc = typeof envReadRpc === 'string' && envReadRpc.trim() ? envReadRpc.trim() : null;
-    const rpcUrls = readRpc ? [readRpc, ...SEPOLIA_READ_RPC_URLS] : SEPOLIA_READ_RPC_URLS;
+    const appRpc =
+      (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STARKNET_RPC_URL) ||
+      'https://api.cartridge.gg/x/starknet/sepolia';
+    const rpcUrls = readRpc
+      ? [readRpc, appRpc, ...SEPOLIA_READ_RPC_FALLBACKS]
+      : [appRpc, ...SEPOLIA_READ_RPC_FALLBACKS];
     let cancelled = false;
 
     (async () => {

@@ -13,7 +13,7 @@ import { ControllerConnector } from '@cartridge/connector';
 import { constants } from 'starknet';
 import { TYCOON_SESSION_POLICIES } from '@/constants/sessionPolicies';
 
-// Ensure every Connector (base + InjectedConnector) has externalDetectWallets so no caller throws
+// Ensure every Connector has externalDetectWallets so StarknetConfig/setInterval never throws
 const noop = function externalDetectWallets() {};
 const patchProto = (proto: object) => {
   if (!proto || typeof (proto as Record<string, unknown>).externalDetectWallets === 'function') return;
@@ -23,6 +23,7 @@ const patchProto = (proto: object) => {
 };
 if (typeof Connector !== 'undefined' && Connector.prototype) patchProto(Connector.prototype);
 if (typeof InjectedConnector !== 'undefined' && InjectedConnector.prototype) patchProto(InjectedConnector.prototype);
+if (typeof ControllerConnector !== 'undefined' && ControllerConnector.prototype) patchProto(ControllerConnector.prototype);
 
 const cartridgeConnector = new ControllerConnector({
   defaultChainId: constants.StarknetChainId.SN_SEPOLIA,
@@ -42,8 +43,9 @@ const cartridgeConnector = new ControllerConnector({
   policies: TYCOON_SESSION_POLICIES,
 });
 
-(cartridgeConnector as unknown as Record<string, unknown>).externalDetectWallets =
-  noop;
+// Ensure instance has externalDetectWallets (in case prototype patch missed or connector is from different bundle)
+const c = cartridgeConnector as unknown as Record<string, unknown>;
+if (typeof c.externalDetectWallets !== 'function') c.externalDetectWallets = noop;
 
 export function StarknetProvider({ children }: { children: React.ReactNode }) {
   const provider = jsonRpcProvider({
@@ -62,7 +64,11 @@ export function StarknetProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const connectors = [cartridgeConnector];
+  const connectors = [cartridgeConnector].map((conn) => {
+    const k = conn as unknown as Record<string, unknown>;
+    if (k && typeof k.externalDetectWallets !== 'function') k.externalDetectWallets = noop;
+    return conn;
+  });
 
   return (
     <StarknetConfig
