@@ -18,11 +18,19 @@ const RPC_CALL_MS = 15_000;
  * set NEXT_PUBLIC_STARKNET_READ_RPC_URL to a full RPC (e.g. https://starknet-sepolia.public.blastapi.io).
  */
 
-/** Fallback RPCs for starknet_call. Cartridge is tried first; from browser you must whitelist your domain in Cartridge Slot (see docs). drpc often returns 400 for our payload so excluded. */
+/** Public RPCs used only outside browser (e.g. SSR) or when proxy unavailable. From browser these block CORS so we use Cartridge + same-origin proxy only. */
 const SEPOLIA_READ_RPC_FALLBACKS = [
   'https://starknet-sepolia.public.blastapi.io',
   'https://starknet-sepolia-rpc.publicnode.com',
 ];
+
+/** Same-origin proxy for view calls. Server must set STARKNET_RPC_UPSTREAM. */
+function getProxyRpcUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const origin = window.location?.origin;
+  if (!origin || origin === 'null') return null;
+  return `${origin}/api/starknet-rpc`;
+}
 
 /** ABI for Player system view functions. Use simple types so starknet.js encodes calldata correctly. */
 const PLAYER_VIEW_ABI = [
@@ -256,9 +264,17 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     const appRpc =
       (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STARKNET_RPC_URL) ||
       'https://api.cartridge.gg/x/starknet/sepolia';
-    const rpcUrls = readRpc
-      ? [readRpc, appRpc, ...SEPOLIA_READ_RPC_FALLBACKS]
-      : [appRpc, ...SEPOLIA_READ_RPC_FALLBACKS];
+    const proxyUrl = getProxyRpcUrl();
+    // In browser: only Cartridge (whitelisted) + same-origin proxy. Never call public RPCs (BlastAPI etc.) from browser - they block CORS.
+    const inBrowser = typeof window !== 'undefined';
+    const rpcUrls =
+      readRpc !== null
+        ? inBrowser
+          ? [readRpc, appRpc, ...(proxyUrl ? [proxyUrl] : [])]
+          : [readRpc, appRpc, ...SEPOLIA_READ_RPC_FALLBACKS]
+        : inBrowser
+          ? [appRpc, ...(proxyUrl ? [proxyUrl] : [])]
+          : [appRpc, ...SEPOLIA_READ_RPC_FALLBACKS];
     let cancelled = false;
 
     (async () => {
