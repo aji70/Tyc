@@ -194,7 +194,16 @@ const HeroSectionMobile: React.FC = () => {
 
     try {
       if (!isUserRegistered && !localRegistered) {
-        await registerPlayer(finalUsername);
+        try {
+          await registerPlayer(finalUsername);
+        } catch (onChainErr: any) {
+          const msg = onChainErr?.message ?? "";
+          if (/wallet|contract not available|not available/i.test(msg)) {
+            // Starknet-only: skip on-chain, proceed to backend-only
+          } else {
+            throw onChainErr;
+          }
+        }
       }
 
       if (!user) {
@@ -257,9 +266,11 @@ const HeroSectionMobile: React.FC = () => {
         }
       }
 
+      console.error("[HeroSection-mobile] Registration failed:", err?.message ?? err);
       let message = "Registration failed. Try again.";
       if (err?.shortMessage) message = err.shortMessage;
       if (err?.message?.includes("insufficient funds")) message = "Insufficient gas funds";
+      if (typeof err?.message === "string" && err.message) message = err.message;
 
       toast.update(toastId, {
         render: message,

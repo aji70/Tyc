@@ -212,9 +212,18 @@ const HeroSection: React.FC = () => {
     const toastId = toast.loading("Processing registration...");
 
     try {
-      // Register on-chain if not already
+      // Register on-chain if not already (EVM/ContractProvider). Skip when Starknet-only (no EVM wallet).
       if (!isUserRegistered && !localRegistered) {
-        await registerPlayer(finalUsername);
+        try {
+          await registerPlayer(finalUsername);
+        } catch (onChainErr: any) {
+          const msg = onChainErr?.message ?? "";
+          if (/wallet|contract not available|not available/i.test(msg)) {
+            // Starknet-only: no EVM wallet; skip on-chain, proceed to backend-only registration
+          } else {
+            throw onChainErr;
+          }
+        }
       }
 
       // Create backend user if doesn't exist
@@ -283,9 +292,11 @@ const HeroSection: React.FC = () => {
         }
       }
 
+      console.error("[HeroSection] Registration failed:", err?.message ?? err);
       let message = "Registration failed. Try again.";
       if (err?.shortMessage) message = err.shortMessage;
       if (err?.message?.includes("insufficient funds")) message = "Insufficient gas funds";
+      if (typeof err?.message === "string" && err.message) message = err.message;
 
       toast.update(toastId, {
         render: message,
