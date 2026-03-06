@@ -35,6 +35,15 @@ const BFCACHE_RELOAD_SCRIPT = `
 })();
 `;
 
+// Prevents "externalDetectWallets is not a function" when Cartridge/wallet code expects it on window
+const EXTERNAL_DETECT_WALLETS_SHIM = `
+(function(){
+  if (typeof window !== 'undefined' && typeof window.externalDetectWallets !== 'function') {
+    window.externalDetectWallets = function() {};
+  }
+})();
+`;
+
 // Remove the duplicate 'cookies' global variable—it's not needed
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -85,6 +94,7 @@ export default async function RootLayout({
       </head>
       <body className="antialiased bg-[#010F10] w-full">
         <Script id="bfcache-reload" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: BFCACHE_RELOAD_SCRIPT }} />
+        <Script id="external-detect-wallets-shim" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: EXTERNAL_DETECT_WALLETS_SHIM }} />
         <FarcasterReady />
         <ContextProvider cookies={cookies}>
           <LayoutBody>

@@ -25,6 +25,10 @@ const cartridgeConnector = new ControllerConnector({
   policies: TYCOON_SESSION_POLICIES,
 });
 
+// Fix: some Cartridge/wallet code expects this; avoid "externalDetectWallets is not a function"
+(cartridgeConnector as unknown as Record<string, unknown>).externalDetectWallets =
+  function externalDetectWallets() {};
+
 export function StarknetProvider({ children }: { children: React.ReactNode }) {
   const provider = jsonRpcProvider({
     rpc: (chain) => {

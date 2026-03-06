@@ -17,16 +17,24 @@ export function DojoProvider({ children }: DojoProviderProps) {
 
   useEffect(() => {
     async function initializeSdk() {
+      const toriiUrl =
+        process.env.NEXT_PUBLIC_TORII_URL ??
+        (dojoConfig as { toriiUrl?: string }).toriiUrl ??
+        '';
+
+      // Solution: do not init Torii client when URL is missing → avoids "invalid content type: application/json" and 404
+      if (!toriiUrl || !toriiUrl.trim()) {
+        setSdk(null);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
 
         const { init } = await import('@dojoengine/sdk');
 
-        const toriiUrl =
-          process.env.NEXT_PUBLIC_TORII_URL ??
-          (dojoConfig as { toriiUrl?: string }).toriiUrl ??
-          '';
         const relayUrl =
           process.env.NEXT_PUBLIC_RELAY_URL ??
           (dojoConfig as { relayUrl?: string }).relayUrl ??
@@ -35,7 +43,7 @@ export function DojoProvider({ children }: DojoProviderProps) {
 
         const sdkInstance = await init<SchemaType>({
           client: {
-            toriiUrl,
+            toriiUrl: toriiUrl.trim(),
             relayUrl,
             worldAddress,
           },
@@ -73,6 +81,11 @@ export function DojoProvider({ children }: DojoProviderProps) {
         <div>Dojo SDK error: {error}</div>
       </div>
     );
+  }
+
+  // When Torii URL was missing we skipped init; render children without Dojo SDK so no Torii calls run
+  if (sdk === null && !isLoading) {
+    return <>{children}</>;
   }
 
   return (
