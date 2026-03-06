@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 
@@ -18,7 +18,7 @@ type SyncState = "idle" | "checking" | "needs_username" | "submitting" | "done" 
  * If first-time Privy user, shows a modal to choose username and calls POST /auth/privy-signin.
  */
 export default function PrivyBackendSync() {
-  const { ready, authenticated, getAccessToken } = usePrivy();
+  const { ready, authenticated, getAccessToken } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const refetchGuest = guestAuth?.refetchGuest;
   const retryCountRef = useRef(0);

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
-import { usePrivy } from "@privy-io/react-auth";
+import { useAppAuth } from "@/hooks/useAppAuth";
 import { X, Wallet, Gamepad2, Dices, Sparkles } from "lucide-react";
 
 const ONBOARDING_STORAGE_KEY = "tycoon_onboarding_done";
@@ -27,7 +27,7 @@ export default function OnboardingModal({ onDismiss }: OnboardingModalProps) {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const { open: openAppKit } = useAppKit();
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated, login } = useAppAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
 

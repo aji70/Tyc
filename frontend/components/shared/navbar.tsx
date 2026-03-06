@@ -17,7 +17,7 @@ import WalletDisconnectModal from './wallet-disconnect-modal';
 import NetworkSwitcherModal from './network-switcher-modal';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { useOnlineUsers } from '@/hooks/useOnlineUsers';
-import { usePrivy } from '@privy-io/react-auth';
+import { useAppAuth } from '@/hooks/useAppAuth';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
 
 const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
@@ -69,7 +69,7 @@ const NavBar = () => {
   const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
   const profileAvatar = useProfileAvatar();
 
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, user } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
   const isPrivyAuthed = ready && authenticated;

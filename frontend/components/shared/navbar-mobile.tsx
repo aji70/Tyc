@@ -19,7 +19,7 @@ import NetworkSwitcherModal from './network-switcher-modal';
 import { useGetUsername } from '@/context/ContractProvider';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { isAddress } from 'viem';
-import { usePrivy } from '@privy-io/react-auth';
+import { useAppAuth } from '@/hooks/useAppAuth';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
 
 const SCROLL_TOP_THRESHOLD = 40;
@@ -79,7 +79,7 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
   const { address, isConnected } = useAppKitAccount();
   const { caipNetwork, chainId } = useAppKitNetwork();
   const { connect } = useConnect();
-  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { ready, authenticated, login, logout, user } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
   const isPrivyAuthed = ready && authenticated;

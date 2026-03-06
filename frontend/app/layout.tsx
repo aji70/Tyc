@@ -6,8 +6,6 @@ import { getMetadata } from "@/utils/getMeatadata";
 import { headers } from "next/headers";
 import ContextProvider from "@/context";
 import AppKitProviderWrapper from "@/components/AppKitProviderWrapper";
-import PrivyProviderWrapper from "@/components/PrivyProviderWrapper";
-import PrivyBackendSync from "@/components/PrivyBackendSync";
 import { TycoonProvider } from "@/context/ContractProvider";
 import { GuestAuthProvider } from "@/context/GuestAuthContext";
 import { ToastContainer } from "react-toastify";
@@ -89,54 +87,51 @@ export default async function RootLayout({
       <body className="antialiased bg-[#010F10] w-full">
         <Script id="bfcache-reload" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: BFCACHE_RELOAD_SCRIPT }} />
         <FarcasterReady />
-        <PrivyProviderWrapper>
-          <ContextProvider cookies={cookies}>
-            <LayoutBody>
+        <ContextProvider cookies={cookies}>
+          <LayoutBody>
             <TycoonProvider>
               <GuestAuthProvider>
-              <PrivyBackendSync />
-              <TournamentProvider>
-              <AppKitProviderWrapper>
-                {/* SocketProvider commented out as in your code */}
-                {/* <SocketProvider serverUrl="https://base-monopoly-production.up.railway.app/api"> */}
-                
-                {/* ← Use the client wrapper here—no more useMediaQuery! */}
-                <QueryProvider>
-                <BfcacheReloadGuard />
-                <ClientLayout cookies={cookies}>
-                  {children}
-                </ClientLayout>
-                
-                <ScrollToTopBtn />
-                <ToastContainer
-                  position="top-right"
-                  autoClose={5000}
-                  hideProgressBar={false}
-                  newestOnTop
-                  closeOnClick
-                  rtl={false}
-                  pauseOnFocusLoss
-                  draggable
-                  pauseOnHover
-                  theme="dark"
-                  toastStyle={{
-                    fontFamily: "Orbitron, sans-serif",
-                    background: "#0E1415",
-                    color: "#00F0FF",
-                    border: "1px solid #003B3E",
-                  }}
-                />
-                <Toaster position="top-center" />
-                </QueryProvider>
-                
-                {/* </SocketProvider> */}
-              </AppKitProviderWrapper>
-              </TournamentProvider>
+                <TournamentProvider>
+                  <AppKitProviderWrapper>
+                    {/* SocketProvider commented out as in your code */}
+                    {/* <SocketProvider serverUrl="https://base-monopoly-production.up.railway.app/api"> */}
+
+                    {/* ← Use the client wrapper here—no more useMediaQuery! */}
+                    <QueryProvider>
+                      <BfcacheReloadGuard />
+                      <ClientLayout cookies={cookies}>
+                        {children}
+                      </ClientLayout>
+
+                      <ScrollToTopBtn />
+                      <ToastContainer
+                        position="top-right"
+                        autoClose={5000}
+                        hideProgressBar={false}
+                        newestOnTop
+                        closeOnClick
+                        rtl={false}
+                        pauseOnFocusLoss
+                        draggable
+                        pauseOnHover
+                        theme="dark"
+                        toastStyle={{
+                          fontFamily: "Orbitron, sans-serif",
+                          background: "#0E1415",
+                          color: "#00F0FF",
+                          border: "1px solid #003B3E",
+                        }}
+                      />
+                      <Toaster position="top-center" />
+                    </QueryProvider>
+
+                    {/* </SocketProvider> */}
+                  </AppKitProviderWrapper>
+                </TournamentProvider>
               </GuestAuthProvider>
             </TycoonProvider>
-            </LayoutBody>
-          </ContextProvider>
-        </PrivyProviderWrapper>
+          </LayoutBody>
+        </ContextProvider>
       </body>
     </html>
   );

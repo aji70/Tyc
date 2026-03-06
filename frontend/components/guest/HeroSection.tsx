@@ -15,7 +15,7 @@ import {
   useGetGameByCode,
 } from "@/context/ContractProvider";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
-import { usePrivy } from "@privy-io/react-auth";
+import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
 import { User as UserType } from "@/lib/types/users";
@@ -25,7 +25,7 @@ import { useUserLevel } from "@/hooks/useUserLevel";
 const HeroSection: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
-  const { ready, authenticated, login, logout, user: privyUser } = usePrivy();
+  const { ready, authenticated, login, logout, user: privyUser } = useAppAuth();
   const { open: openAppKit } = useAppKit();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
