@@ -2,11 +2,9 @@ import { cookieStorage, createStorage, http } from '@wagmi/core'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { celo } from '@reown/appkit/networks'
 
-export const projectId = process.env.NEXT_PUBLIC_PROJECT_ID
-
-if (!projectId) {
-  throw new Error('Project ID is not defined')
-}
+// Reown AppKit (WalletConnect) project ID. Set NEXT_PUBLIC_PROJECT_ID in Vercel for production.
+export const projectId =
+  process.env.NEXT_PUBLIC_PROJECT_ID || '912f9a3279905a7dd417a7bf68e04209'
 
 // Celo only (or Celo/Base in a dedicated frontend)
 export const networks = [celo]
