@@ -1,0 +1,16 @@
+# Torii config for Tycoon on Starknet Sepolia
+
+world_address = "0x041167a2e9f249d46e52079a9eee47f75389801dd7e06fe933e275fde8fe742b"
+rpc = "https://api.cartridge.gg/x/starknet/sepolia"
+
+# Persistent DB (required for production; omit for in-memory dev)
+db_dir = "torii_sepolia.db"
+
+[indexing]
+polling_interval = 500
+pending = false
+
+[server]
+http_addr = "0.0.0.0"
+http_port = 8080
+http_cors_origins = ["*"]
