@@ -5,8 +5,10 @@ import { Contract, RpcProvider, shortString } from 'starknet';
 import manifest from '@/lib/dojo/manifest_sepolia.json';
 import { dojoConfig } from '@/lib/dojo/dojoConfig';
 import { stringToFelt } from '@/utils/starknet';
+import { DOJO_WORLD_ADDRESS } from '@/constants/starknet';
 
 const PLAYER_TAG = 'tycoon-player';
+const RPC_CALL_MS = 15_000;
 
 /** Fallback Starknet Sepolia RPCs when primary fails. */
 const SEPOLIA_RPC_FALLBACKS = [
@@ -52,11 +54,23 @@ const PLAYER_VIEW_ABI = [
   },
 ];
 
-function getPlayerContractAddress(): string {
-  const contract = (manifest as { contracts?: { tag: string; address: string }[] }).contracts?.find(
-    (c) => c.tag === PLAYER_TAG
-  );
-  return contract?.address ?? '';
+/** Use World contract for view calls (same as Starkscan) — Player system is invoked via World. */
+function getContractAddressForViewCalls(): string {
+  const fromEnv =
+    typeof process !== 'undefined' && process.env.NEXT_PUBLIC_DOJO_WORLD_ADDRESS;
+  const envStr = typeof fromEnv === 'string' ? fromEnv.trim() : '';
+  if (envStr) return envStr;
+  const world = (manifest as { world?: { address?: string } }).world?.address;
+  return world ?? DOJO_WORLD_ADDRESS;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) =>
+      setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
 }
 
 /** Normalize address to hex (lowercase for consistency). */
@@ -217,8 +231,8 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       return;
     }
 
-    const playerAddress = getPlayerContractAddress();
-    if (!playerAddress) {
+    const contractAddress = getContractAddressForViewCalls();
+    if (!contractAddress) {
       setIsLoading(false);
       return;
     }
@@ -226,7 +240,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     const normalizedAddress = normalizeAddress(address);
     const primaryRpc =
       (dojoConfig as { rpcUrl?: string }).rpcUrl ??
-      process.env.NEXT_PUBLIC_STARKNET_RPC_URL ??
+      (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STARKNET_RPC_URL) ??
       'https://api.cartridge.gg/x/starknet/sepolia';
     const rpcUrls = [primaryRpc, ...SEPOLIA_RPC_FALLBACKS];
     let cancelled = false;
@@ -270,80 +284,110 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       };
 
       let lastErr: Error | null = null;
-      for (const rpcUrl of rpcUrls) {
-        if (cancelled) break;
-        try {
-          const provider = new RpcProvider({ nodeUrl: rpcUrl });
-          const playerContract = new Contract(PLAYER_VIEW_ABI, playerAddress, provider);
-
-          // 1) Try get_username first
-          let name: string | null = null;
-          try {
-            const usernameRes = await playerContract.call('get_username', [normalizedAddress]);
-            if (cancelled) break;
-            const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
-            name = decodeUsername(arr);
-          } catch (_) {}
-
-          if (name?.trim()) {
-            setIsRegisteredOnChain(true);
-            const trimmed = name.trim();
-            setUsernameOnChain(trimmed);
-            const fullUser = await fetchFullUser(playerContract, trimmed);
-            if (!cancelled && fullUser) setUserOnChain(fullUser);
-            if (!cancelled) setIsLoading(false);
-            return;
-          }
-
-          // 2) Call is_registered
-          const res = await playerContract.call('is_registered', [normalizedAddress]);
+      try {
+        for (const rpcUrl of rpcUrls) {
           if (cancelled) break;
+          try {
+            const provider = new RpcProvider({ nodeUrl: rpcUrl });
+            const contract = new Contract(PLAYER_VIEW_ABI, contractAddress, provider);
 
-          const result = Array.isArray(res) ? res : getResult(res);
-          const raw = result[0];
-          const isReg =
-            result.length > 0 &&
-            (raw === true ||
-              raw === '0x1' ||
-              raw === '1' ||
-              (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
-          setIsRegisteredOnChain(!!isReg);
-
-          if (!isReg) {
-            setUsernameOnChain(null);
-            setUserOnChain(null);
-            if (!cancelled) setIsLoading(false);
-            return;
-          }
-
-          if (!name) {
+            // 1) Try get_username first (same contract as Starkscan "Read")
+            let name: string | null = null;
             try {
-              const usernameRes2 = await playerContract.call('get_username', [normalizedAddress]);
-              if (!cancelled) {
-                const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
-                name = decodeUsername(arr2);
-              }
+              const usernameRes = await withTimeout(
+                contract.call('get_username', [normalizedAddress]),
+                RPC_CALL_MS,
+                'get_username'
+              );
+              if (cancelled) break;
+              const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
+              name = decodeUsername(arr);
             } catch (_) {}
-          }
-          setUsernameOnChain(name);
-          if (name?.trim()) {
-            const fullUser = await fetchFullUser(playerContract, name.trim());
-            if (!cancelled && fullUser) setUserOnChain(fullUser);
-          }
-          if (!cancelled) setIsLoading(false);
-          return;
-        } catch (err) {
-          lastErr = err instanceof Error ? err : new Error(String(err));
-          if (process.env.NODE_ENV === 'development') console.warn('[useDojoPlayerOnChain] RPC failed:', rpcUrl, lastErr.message);
-        }
-      }
 
-      if (!cancelled) {
-        if (lastErr) setError(lastErr);
-        setIsRegisteredOnChain(false);
-        setUsernameOnChain(null);
-        setUserOnChain(null);
-        setIsLoading(false);
+            if (name?.trim()) {
+              if (!cancelled) {
+                setIsRegisteredOnChain(true);
+                const trimmed = name.trim();
+                setUsernameOnChain(trimmed);
+                try {
+                  const fullUser = await withTimeout(
+                    fetchFullUser(contract, trimmed),
+                    RPC_CALL_MS,
+                    'get_user'
+                  );
+                  if (!cancelled && fullUser) setUserOnChain(fullUser);
+                } catch (_) {}
+              }
+              return;
+            }
+
+            // 2) Call is_registered (same as Starkscan)
+            const res = await withTimeout(
+              contract.call('is_registered', [normalizedAddress]),
+              RPC_CALL_MS,
+              'is_registered'
+            );
+            if (cancelled) break;
+
+            const result = Array.isArray(res) ? res : getResult(res);
+            const raw = result[0];
+            const isReg =
+              result.length > 0 &&
+              (raw === true ||
+                raw === '0x1' ||
+                raw === '1' ||
+                (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
+            if (!cancelled) setIsRegisteredOnChain(!!isReg);
+
+            if (!isReg) {
+              if (!cancelled) {
+                setUsernameOnChain(null);
+                setUserOnChain(null);
+              }
+              return;
+            }
+
+            if (!name) {
+              try {
+                const usernameRes2 = await withTimeout(
+                  contract.call('get_username', [normalizedAddress]),
+                  RPC_CALL_MS,
+                  'get_username'
+                );
+                if (!cancelled) {
+                  const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
+                  name = decodeUsername(arr2);
+                }
+              } catch (_) {}
+            }
+            if (!cancelled) setUsernameOnChain(name);
+            if (name?.trim() && !cancelled) {
+              try {
+                const fullUser = await withTimeout(
+                  fetchFullUser(contract, name.trim()),
+                  RPC_CALL_MS,
+                  'get_user'
+                );
+                if (!cancelled && fullUser) setUserOnChain(fullUser);
+              } catch (_) {}
+            }
+            return;
+          } catch (err) {
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+              console.warn('[useDojoPlayerOnChain] RPC failed:', rpcUrl, lastErr.message);
+            }
+          }
+        }
+
+        if (!cancelled) {
+          if (lastErr) setError(lastErr);
+          setIsRegisteredOnChain(false);
+          setUsernameOnChain(null);
+          setUserOnChain(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     })();
 
