@@ -1,122 +1,26 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  webpack: (config, { isServer, webpack, dev }) => {
-    // Enable WebAssembly experiments
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      syncWebAssembly: true,
-      layers: true,
-    };
-
-    // Configure WASM file handling with proper rule ordering
-    const wasmRule = {
-      test: /\.wasm$/,
-      type: 'asset/resource',
-      generator: {
-        filename: 'static/wasm/[name].[hash][ext]',
-      },
-    };
-
-    // Add WASM rule to the beginning to ensure it takes precedence
-    config.module.rules.unshift(wasmRule);
-
-    // Add rule for @dojoengine/torii-wasm JavaScript files
-    config.module.rules.push({
-      test: /@dojoengine[\\/]torii-wasm[\\/]pkg[\\/]web[\\/].*\.js$/,
-      type: 'javascript/auto',
-      resolve: {
-        fullySpecified: false,
-      },
-    });
-
-    // Optimize WASM loading
-    config.optimization = {
-      ...config.optimization,
-      moduleIds: 'deterministic',
-      splitChunks: {
-        ...config.optimization.splitChunks,
-        cacheGroups: {
-          ...config.optimization.splitChunks?.cacheGroups,
-          wasm: {
-            test: /\.wasm$/,
-            name: 'wasm',
-            chunks: 'all',
-            enforce: true,
-          },
-        },
-      },
-    };
-
-    // Add fallbacks for Node.js modules in the browser
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-        crypto: false,
-        stream: false,
-        http: false,
-        https: false,
-        os: false,
-        url: false,
-        zlib: false,
-        path: false,
-        buffer: false,
-      };
-    }
-
-    // Handle WASM imports properly
-    config.resolve.extensions = [
-      ...config.resolve.extensions,
-      '.wasm',
-    ];
-
-    // Add plugins for better WASM handling
-    config.plugins.push(
-      new webpack.DefinePlugin({
-        'process.env.WEBPACK_WASM_SUPPORT': JSON.stringify(true),
-      })
-    );
-
-    // Only ignore problematic WASM modules in development
-    if (dev) {
-      config.plugins.push(
-        new webpack.IgnorePlugin({
-          resourceRegExp: /dojo_c_bg\.wasm$/,
-        })
-      );
-    }
-
-    // Add support for dynamic imports of WASM
-    config.output = {
-      ...config.output,
-      webassemblyModuleFilename: 'static/wasm/[modulehash].wasm',
-      assetModuleFilename: 'static/media/[name].[hash][ext]',
-    };
-
-    return config;
+  typescript: {
+    // Ignore type errors in dependencies (e.g. @ethereumjs/tx overload signature)
+    ignoreBuildErrors: true,
   },
-  experimental: {
-    esmExternals: 'loose',
-    webpackBuildWorker: true,
-  },
-  transpilePackages: [
-    '@dojoengine/torii-wasm',
-    '@dojoengine/sdk',
-    '@dojoengine/core',
-  ],
-  images: {
-    remotePatterns: [
+  async redirects() {
+    return [
       {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**',
+        source: '/.well-known/farcaster.json',
+        destination: 'https://api.farcaster.xyz/miniapps/hosted-manifest/019b9413-dacb-6826-2d02-09f283211209',
+        permanent: false, // This ensures a temporary 307 redirect
+        statusCode: 307,  // Explicitly set to 307 (recommended by Farcaster)
       },
-    ],
+    ];
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI,
+  org: process.env.SENTRY_ORG ?? undefined,
+  project: process.env.SENTRY_PROJECT ?? undefined,
+});
+

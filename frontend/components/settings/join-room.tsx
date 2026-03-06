@@ -1,691 +1,429 @@
-'use client';
+"use client";
 
-import { House } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
-import { FaUser } from 'react-icons/fa6';
-import { IoIosAddCircle } from 'react-icons/io';
-import { IoKey, IoArrowDown, IoArrowUp } from 'react-icons/io5';
-import { RxDotFilled } from 'react-icons/rx';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { IoHomeOutline, IoArrowForwardOutline } from "react-icons/io5";
+import { useAccount } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
+import { apiClient } from "@/lib/api";
+import { ApiResponse } from "@/types/api";
+import { Game } from "@/lib/types/games";
+import { useGuestAuthOptional } from "@/context/GuestAuthContext";
+import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
+import { SkeletonGameGrid } from "@/components/ui/SkeletonCard";
+import EmptyState from "@/components/ui/EmptyState";
+import { Users } from "lucide-react";
 
-// Define settings interface
-interface GameSettings {
-  auction: number;
-  even_build: number;
-  mortgage: number;
-  randomize_play_order: number;
-  rent_in_prison: number;
-  starting_cash: number;
+interface JoinRoomProps {
+  /** When game is RUNNING, redirect here (default: /game-play). e.g. /board-3d-multi for 3D. */
+  redirectToBoard?: string;
+  /** When game is PENDING, redirect to this waiting room (default: /game-waiting). e.g. /game-waiting-3d. */
+  redirectToWaiting?: string;
+  /** "Create new game" link (default: /game-settings). e.g. /game-settings-3d for 3D. */
+  redirectCreateNew?: string;
 }
 
-// Define game interface - added is_initialised
-interface Game {
-  id: number;
-  code: string;
-  mode: 'PUBLIC' | 'PRIVATE';
-  status: 'Pending' | 'Ongoing' | 'Ended'; // Updated to include ENDED
-  is_initialised?: boolean;
-  number_of_players: number;
-  players_joined?: number;
-  creator_id?: number;
-  settings?: GameSettings;
-  created_at?: string;
-}
-
-const JoinRoom = () => {
+export default function JoinRoom({
+  redirectToBoard = "/game-play",
+  redirectToWaiting = "/game-waiting",
+  redirectCreateNew = "/game-settings",
+}: JoinRoomProps = {}): JSX.Element {
   const router = useRouter();
-  // Dummy data for games - updated with real examples: ID 2 (ENDED), ID 12 (ONGOING), ID 20 (PENDING uninit), ID 9 (PENDING init), ID 10 (ONGOING from log)
-  const [games] = useState<Game[]>([
-    {
-      id: 1,
-      code: 'ABC123',
-      mode: 'PUBLIC',
-      status: 'Pending',
-      is_initialised: true,
-      number_of_players: 4,
-      players_joined: 2,
-      creator_id: 1,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: '2025-09-24T10:00:00Z',
-    },
-    {
-      id: 2,
-      code: 'ENDED001', // Mock code
-      mode: 'PUBLIC',
-      status: 'Ended',
-      is_initialised: true,
-      number_of_players: 3,
-      players_joined: 0,
-      creator_id: 1416585833,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: '2025-11-01T00:00:00Z',
-    },
-    {
-      id: 9,
-      code: 'JOINABLE001', // Mock code
-      mode: 'PUBLIC',
-      status: 'Pending',
-      is_initialised: true,
-      number_of_players: 2,
-      players_joined: 1,
-      creator_id: 4713695840083605365,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: '2025-11-01T00:00:00Z',
-    },
-    {
-      id: 10,
-      code: 'GAME10', // Mock code based on log
-      mode: 'PUBLIC',
-      status: 'Ongoing',
-      is_initialised: true,
-      number_of_players: 2,
-      players_joined: 2,
-      creator_id: 4713695840083605365,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: '2025-11-01T00:00:00Z',
-    },
-    {
-      id: 12,
-      code: 'STARTED001', // Mock code
-      mode: 'PUBLIC',
-      status: 'Ongoing',
-      is_initialised: true,
-      number_of_players: 2,
-      players_joined: 2,
-      creator_id: 81782240341865,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: '2025-11-01T00:00:00Z',
-    },
-    {
-      id: 20,
-      code: 'CREATED001', // Mock code
-      mode: 'PUBLIC',
-      status: 'Pending',
-      is_initialised: false,
-      number_of_players: 0, // As per real
-      players_joined: 0,
-      creator_id: 0,
-      settings: {
-        auction: 1,
-        even_build: 0,
-        mortgage: 1,
-        randomize_play_order: 1,
-        rent_in_prison: 0,
-        starting_cash: 1500,
-      },
-      created_at: new Date().toISOString(),
-    },
-  ]);
-  const [ongoingGames, setOngoingGames] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { address, isConnected } = useAccount();
+  const { ready, authenticated } = usePrivy();
+  const guestAuth = useGuestAuthOptional();
+  const guestUser = guestAuth?.guestUser ?? null;
+  const isPrivyAuthed = ready && authenticated;
+  const canAct = isConnected || !!guestUser || isPrivyAuthed;
+
+  const [code, setCode] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState<string>(''); // Renamed for clarity: code OR ID
-  const [continueGameId, setContinueGameId] = useState<number | null>(null);
-  const [expandedGame, setExpandedGame] = useState<string | null>(null);
+  const [recentGames, setRecentGames] = useState<Game[]>([]);
+  const [allPendingGames, setAllPendingGames] = useState<Game[]>([]);
+  const [pendingGames, setPendingGames] = useState<Game[]>([]);
+  const [fetchingRecent, setFetchingRecent] = useState<boolean>(true);
+  const [fetchingPending, setFetchingPending] = useState<boolean>(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [timeFilter, setTimeFilter] = useState<number>(5 * 60 * 1000); // Default: last 5 minutes in ms
+  const joinByCodeGuard = usePreventDoubleSubmit();
+
+  // Time filter options - prioritize recent games
+  const timeOptions = [
+    { label: "Last 5 minutes", value: 5 * 60 * 1000 },
+    { label: "Last 10 minutes", value: 10 * 60 * 1000 },
+    { label: "Last 30 minutes", value: 30 * 60 * 1000 },
+    { label: "Last hour", value: 60 * 60 * 1000 },
+    { label: "All pending", value: Infinity },
+  ];
+
+  // Uppercase and trim code input
+  const normalizedCode = useMemo(() => code.trim().toUpperCase(), [code]);
+
+  const fetchGames = useCallback(async () => {
+    if (!canAct) return;
+    const addr = address ?? guestUser?.address;
+    if (!addr) {
+      setFetchingRecent(false);
+      setFetchingPending(false);
+      return;
+    }
+    setFetchError(null);
+    setFetchingRecent(true);
+    setFetchingPending(true);
+
+    let recentFailed = false;
+    let pendingFailed = false;
+
+    try {
+      const resRecent = await apiClient.get<ApiResponse>("/games/my-games", {
+        params: { address: addr },
+      });
+      if (resRecent?.data?.success && Array.isArray(resRecent.data.data)) {
+        setRecentGames(resRecent.data.data as Game[]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch recent games:", err);
+      recentFailed = true;
+    } finally {
+      setFetchingRecent(false);
+    }
+
+    try {
+      const resPending = await apiClient.get<ApiResponse>("/games/open");
+      if (resPending?.data?.success && Array.isArray(resPending.data.data)) {
+        setAllPendingGames(resPending.data.data as Game[]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch open games:", err);
+      pendingFailed = true;
+    } finally {
+      setFetchingPending(false);
+    }
+
+    if (recentFailed || pendingFailed) {
+      setFetchError("Couldn't load games. Check your connection and try again.");
+    }
+  }, [address, canAct, guestUser?.address]);
 
   useEffect(() => {
-    // Load ongoing games from localStorage
-    const storedGames = JSON.parse(localStorage.getItem('ongoingGames') || '[]') as number[];
-    setOngoingGames(storedGames);
-  }, []);
-
-  // Helper: Find game by code or ID - for IDs not in dummy, return mock Pending game (initialized)
-  const findGameByValue = (value: string): Game | null => {
-    const idNum = parseInt(value);
-    const isId = !isNaN(idNum) && value === idNum.toString();
-    if (isId) {
-      // Check dummy first
-      const dummyGame = games.find((g) => g.id === idNum);
-      if (dummyGame) return dummyGame;
-      // Mock initialized Pending game for any valid ID (simulate backend fetch)
-      return {
-        id: idNum,
-        code: `MOCK${idNum.toString().padStart(3, '0')}`,
-        mode: 'PUBLIC' as const,
-        status: 'Pending' as const,
-        is_initialised: true,
-        number_of_players: 4, // Default
-        players_joined: 1, // Assume room for join
-        creator_id: 1,
-        settings: {
-          auction: 1,
-          even_build: 0,
-          mortgage: 1,
-          randomize_play_order: 1,
-          rent_in_prison: 0,
-          starting_cash: 1500,
-        },
-        created_at: new Date().toISOString(),
-      };
-    }
-    return games.find((g) => g.code === value.toUpperCase()) || null;
-  };
-
-  // Unified join handler: Check is_initialised && Pending -> waiting; polished errors
-  const handleJoin = (value: string) => {
-    if (!value.trim()) {
-      setError('Please enter a room code or ID');
+    if (!canAct) {
+      setFetchingRecent(false);
+      setFetchingPending(false);
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
-    // TODO: Real backend - Replace with Starknet call to retrieveGame(value), parse JSON:
-    // e.g., const response = await gameContract.retrieveGame(idOrCode);
-    // const game = {
-    //   ...response,
-    //   status: response.status.variant.Pending ? 'Pending' : response.status.variant.Ongoing ? 'ONGOING' : 'ENDED',
-    //   is_initialised: response.is_initialised,
-    //   number_of_players: parseInt(response.number_of_players),
-    //   players_joined: parseInt(response.players_joined),
-    // };
-
-    const game = findGameByValue(value.trim());
-    if (!game) {
-      setError(`Game with code/ID "${value}" not found.`);
-      setLoading(false);
+    const addr = address ?? guestUser?.address;
+    if (!addr) {
+      setFetchingRecent(false);
+      setFetchingPending(false);
       return;
     }
+    fetchGames();
+  }, [canAct, address, guestUser?.address, fetchGames]);
 
-    // Check initialized and Pending
-    if (!game.is_initialised) {
-      setError('This game has not been initialized yet. Please wait for the creator to set it up.');
-      setLoading(false);
-      return;
-    }
-
-    if (game.status !== 'Pending') {
-      if (game.status === 'Ongoing') {
-        setError('This game has already started. If you are a player, use "Continue Existing Game" to rejoin.');
-      } else if (game.status === 'Ended') {
-        setError('This game has finished. You cannot join a completed game.');
-      } else {
-        setError(`This game is in an invalid state (${game.status}). Please contact support.`);
-      }
-      setLoading(false);
-      return;
-    }
-
-    // Check if full
-    if ((game.players_joined || 0) >= game.number_of_players) {
-      setError('This game is full. No more players can join.');
-      setLoading(false);
-      return;
-    }
-
-    // Redirect to waiting room
-    router.push(`/game-waiting?gameId=${game.id}`);
-    setLoading(false);
-  };
-
-  const handleCreateRoom = () => {
-    router.push('/game-settings');
-  };
-
-  const handleInputJoin = () => {
-    handleJoin(inputValue);
-  };
-
-  // Separate handler for continue: ONGOING only, player check
-  const handleContinueGame = () => {
-    if (!continueGameId || isNaN(continueGameId) || continueGameId <= 0) {
-      setError('Please enter a valid game ID');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    const game = games.find((g) => g.id === continueGameId) || findGameByValue(continueGameId.toString());
-    if (!game) {
-      setError(`Game with ID "${continueGameId}" not found.`);
-      setLoading(false);
-      return;
-    }
-
-    // TODO: Real backend - Fetch and parse as above
-
-    // Must be initialized and ongoing
-    if (!game.is_initialised) {
-      setError('This game has not been initialized. Cannot continue.');
-      setLoading(false);
-      return;
-    }
-    if (game.status !== 'Ongoing') {
-      setError(`Cannot continue this game. It is ${game.status.toLowerCase()}.`);
-      setLoading(false);
-      return;
-    }
-
-    // TODO: Real backend - Verify player membership via contract (e.g., check if user address in game_players)
-
-    // Redirect to game play
-    router.push(`/game-play?gameId=${continueGameId}`);
-    setLoading(false);
-  };
-
-  const handleLeaveGame = () => {
-    if (!continueGameId || isNaN(continueGameId) || continueGameId <= 0) {
-      setError('Please enter a valid game ID');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    // Simulate leaving game (remove from ongoing)
-    const updatedGames = ongoingGames.filter((id) => id !== continueGameId);
-    setOngoingGames(updatedGames);
-    localStorage.setItem('ongoingGames', JSON.stringify(updatedGames));
-    setContinueGameId(null);
-    setLoading(false);
-  };
-
-  const clearOngoingGames = () => {
-    localStorage.removeItem('ongoingGames');
-    setOngoingGames([]);
-  };
-
-  // Toggle dropdown for a specific game
-  const toggleSettings = (code: string) => {
-    setExpandedGame(expandedGame === code ? null : code);
-  };
-
-  // Helper to render player indicators
-  const renderIndicators = (game: Game) => {
-    const playersJoined = game.players_joined || 0;
-    const maxPlayers = game.number_of_players;
-    return (
-      <span className="flex gap-1.5">
-        {Array(playersJoined)
-          .fill(0)
-          .map((_, i) => (
-            <FaUser key={`user-${i}`} className="w-4 h-4 text-[#00F0FF]" />
-          ))}
-        {Array(maxPlayers - playersJoined)
-          .fill(0)
-          .map((_, i) => (
-            <RxDotFilled key={`dot-${i}`} className="w-4 h-4 text-[#455A64]" />
-          ))}
-      </span>
-    );
-  };
-
-  // Helper for private indicator
-  const renderPrivateIndicator = (game: Game) => (
-    <span className="flex gap-1.5 mt-1">
-      {game.mode === 'PRIVATE' && <IoKey className="w-4 h-4 text-[#00F0FF]" />}
-      {Array(game.number_of_players - (game.mode === 'PRIVATE' ? 1 : 0))
-        .fill(0)
-        .map((_, i) => (
-          <RxDotFilled key={`key-dot-${i}`} className="w-4 h-4 text-[#455A64]" />
-        ))}
-    </span>
+  // Only show games that are not finished (so "Continue Game" is never for ended games)
+  const activeRecentGames = useMemo(
+    () =>
+      recentGames.filter(
+        (g) => g.status !== "COMPLETED" && g.status !== "CANCELLED"
+      ),
+    [recentGames]
   );
 
-  // Helper to render game settings
-  const renderGameSettings = (settings?: GameSettings) => {
-    if (!settings) return null;
-    const settingsList = [
-      { key: 'Auction', value: settings.auction ? 'Enabled' : 'Disabled' },
-      { key: 'Even Build', value: settings.even_build ? 'Enabled' : 'Disabled' },
-      { key: 'Mortgage', value: settings.mortgage ? 'Enabled' : 'Disabled' },
-      { key: 'Randomize Play Order', value: settings.randomize_play_order ? 'Enabled' : 'Disabled' },
-      { key: 'Rent in Prison', value: settings.rent_in_prison ? 'Enabled' : 'Disabled' },
-      { key: 'Starting Cash', value: `$${settings.starting_cash}` },
-    ];
-    return (
-      <div className="grid grid-cols-1 gap-2 mt-3 text-[#869298] text-[13px] font-dmSans">
-        {settingsList.map(({ key, value }) => (
-          <p key={key} className="flex justify-between">
-            <span className="font-[500]">{key}:</span>
-            <span>{value}</span>
-          </p>
-        ))}
-      </div>
-    );
-  };
+  // Filter and sort pending games based on timeFilter
+  useEffect(() => {
+    const now = Date.now();
+    let filtered = allPendingGames;
 
-  // Filter Pending AND initialized games for the list
-  const PendingGames = games.filter((game) => game.status === 'Pending' && game.is_initialised === true);
+    if (timeFilter !== Infinity) {
+      filtered = filtered.filter(
+        (game) =>
+          game.created_at && // Assume created_at is an ISO string or timestamp
+          now - new Date(game.created_at).getTime() <= timeFilter
+      );
+    }
+
+    // Sort by created_at descending (most recent first)
+    const sorted = filtered.sort(
+      (a, b) =>
+        new Date(b.created_at ?? 0).getTime() -
+        new Date(a.created_at ?? 0).getTime()
+    );
+
+    setPendingGames(sorted);
+  }, [allPendingGames, timeFilter]);
+
+  const handleJoinByCode = useCallback(async () => {
+    if (!normalizedCode) {
+      setError("Please enter a game code.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await apiClient.get<ApiResponse>(
+        `/games/code/${encodeURIComponent(normalizedCode)}`
+      );
+
+      if (!res?.data?.success || !res.data.data) {
+        throw new Error("Game not found. Check the code and try again.");
+      }
+
+      const game: Game = res.data.data;
+
+      if (game.status === "RUNNING") {
+        // Game already started — go directly to play if player is in it
+        const addr = address ?? guestUser?.address;
+        const isPlayerInGame = addr && game.players.some(
+          (p) => String(p.address || "").toLowerCase() === addr.toLowerCase()
+        );
+
+        if (isPlayerInGame) {
+          setCode("");
+          router.push(`${redirectToBoard}?gameCode=${encodeURIComponent(normalizedCode)}`);
+        } else {
+          throw new Error("This game has already started and you are not a player.");
+        }
+      } else if (game.status === "PENDING") {
+        // Game waiting — go to waiting room (sign in as guest or connect wallet there to join)
+        setCode("");
+        router.push(`${redirectToWaiting}?gameCode=${encodeURIComponent(normalizedCode)}`);
+      } else {
+        throw new Error("This game is no longer active.");
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to join game. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [normalizedCode, address, guestUser?.address, router]);
+
+  const handleContinueGame = useCallback(
+    (game: Game) => {
+      if (game.status === "RUNNING") {
+        router.push(`${redirectToBoard}?gameCode=${encodeURIComponent(game.code)}`);
+      } else if (game.status === "PENDING") {
+        router.push(`${redirectToWaiting}?gameCode=${encodeURIComponent(game.code)}`);
+      }
+    },
+    [router, redirectToBoard, redirectToWaiting]
+  );
+
+  const handleJoinPublicGame = useCallback(
+    (game: Game) => {
+      if (game.status === "PENDING") {
+        router.push(`${redirectToWaiting}?gameCode=${encodeURIComponent(game.code)}`);
+      }
+    },
+    [router, redirectToWaiting]
+  );
+
+  const handleCreateNew = () => router.push(redirectCreateNew);
 
   return (
-    <section className="w-full min-h-screen bg-settings bg-cover bg-fixed bg-center">
-      <main className="w-full min-h-screen py-20 flex flex-col items-center justify-start bg-[#010F101F] backdrop-blur-[12px] px-4">
-        <div className="w-full flex flex-col items-center mb-8">
-          <h2 className="text-[#F0F7F7] font-orbitron md:text-[24px] text-[20px] font-[700] text-center">
-            Join Room
+    <section className="w-full min-h-screen bg-settings bg-cover bg-fixed bg-center bg-[#010F10]">
+      <main className="w-full min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-[#010F10]/90 to-[#010F10]/50 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-xl lg:max-w-4xl bg-[#0A1A1B]/80 p-6 sm:p-8 lg:p-12 rounded-2xl shadow-2xl border border-[#00F0FF]/50 backdrop-blur-md">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold font-orbitron mb-8 lg:mb-12 text-center tracking-widest bg-gradient-to-r from-[#00F0FF] to-[#FF00FF] bg-clip-text text-transparent animate-pulse">
+            Join Tycoon
           </h2>
-          <p className="text-[#869298] text-[16px] font-dmSans text-center mt-2">
-            Select the room you would like to join
-          </p>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="w-full max-w-[792px] flex flex-col sm:flex-row justify-center sm:justify-between items-center gap-4 mb-8">
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="relative group w-full sm:w-[227px] h-[40px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-            disabled={loading}
-          >
-            <svg
-              width="227"
-              height="40"
-              viewBox="0 0 227 40"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="absolute top-0 left-0 w-full h-full"
-            >
-              <path
-                d="M6 1H221C225.373 1 227.996 5.85486 225.601 9.5127L207.167 37.5127C206.151 39.0646 204.42 40 202.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                fill="#0E1415"
-                stroke="#003B3E"
-                strokeWidth={1}
-                className="group-hover:stroke-[#00F0FF] transition-all duration-300 ease-in-out"
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[#0FF0FC] capitalize text-[13px] font-dmSans font-medium z-10">
-              <House className="mr-1 w-[14px] h-[14px]" />
-              Go Back Home
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateRoom}
-            className="relative group w-full sm:w-[227px] h-[40px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-            disabled={loading}
-          >
-            <svg
-              width="227"
-              height="40"
-              viewBox="0 0 227 40"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="absolute top-0 left-0 w-full h-full transform scale-x-[-1] scale-y-[-1]"
-            >
-              <path
-                d="M6 1H221C225.373 1 227.996 5.85486 225.601 9.5127L207.167 37.5127C206.151 39.0646 204.42 40 202.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                fill="#003B3E"
-                stroke="#003B3E"
-                strokeWidth={1}
-                className="group-hover:stroke-[#00F0FF] transition-all duration-300 ease-in-out"
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[#00F0FF] capitalize text-[12px] font-dmSans font-medium z-10">
-              <IoIosAddCircle className="mr-1 w-[14px] h-[14px]" />
-              Create New Room
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={clearOngoingGames}
-            className="relative group w-full sm:w-[227px] h-[40px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-            disabled={loading}
-          >
-            <svg
-              width="227"
-              height="40"
-              viewBox="0 0 227 40"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="absolute top-0 left-0 w-full h-full"
-            >
-              <path
-                d="M6 1H221C225.373 1 227.996 5.85486 225.601 9.5127L207.167 37.5127C206.151 39.0646 204.42 40 202.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                fill="#0E1415"
-                stroke="#FF0000"
-                strokeWidth={1}
-                className="group-hover:stroke-[#FF0000] transition-all duration-300 ease-in-out"
-              />
-            </svg>
-            <span className="absolute inset-0 flex items-center justify-center text-[#FF0000] capitalize text-[13px] font-dmSans font-medium z-10">
-              Clear Ongoing Games
-            </span>
-          </button>
-        </div>
+          {/* Top Section: Enter Code and Create New Side by Side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+            {/* Enter Game Code */}
+            <div className="space-y-6">
+              <h3 className="text-xl lg:text-2xl font-bold text-[#00F0FF] text-center font-orbitron">
+                Enter Game Code
+              </h3>
 
-        {/* Rooms List */}
-        <div className="w-full max-w-[792px] bg-[#010F10] rounded-[12px] border-[1px] border-[#003B3E] p-6 md:p-8 flex flex-col gap-6">
-          {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-[#FF6B6B] text-center text-[14px] font-dmSans bg-[#FF6B6B]/10 p-3 rounded-[8px] border border-[#FF6B6B]/30"
-            >
-              {error}
-            </motion.p>
-          )}
-
-          {/* Join by Code or ID */}
-          <div className="w-full flex flex-col sm:flex-row gap-4">
-            <input
-              type="text"
-              placeholder="Input room code (e.g., ABC123) or ID (e.g., 1)"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              className="flex-1 h-[52px] px-4 text-[#73838B] border-[1px] border-[#0E282A] rounded-[12px] outline-none focus:border-[#00F0FF] bg-transparent placeholder:text-[#455A64]"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleInputJoin();
-                }
-              }}
-              disabled={loading}
-            />
-            <button
-              type="button"
-              onClick={handleInputJoin}
-              className="relative group w-full sm:w-[260px] h-[52px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-              disabled={loading || !inputValue.trim()}
-            >
-              <svg
-                width="260"
-                height="52"
-                viewBox="0 0 260 52"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"
-              >
-                <path
-                  d="M10 1H250C254.373 1 256.996 6.85486 254.601 10.5127L236.167 49.5127C235.151 51.0646 233.42 52 231.565 52H10C6.96244 52 4.5 49.5376 4.5 46.5V9.5C4.5 6.46243 6.96243 4 10 4Z"
-                  fill="#00F0FF"
-                  stroke="#0E282A"
-                  strokeWidth={1}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && !joinByCodeGuard.isSubmitting && joinByCodeGuard.submit(() => handleJoinByCode())}
+                  placeholder="ABCD1234"
+                  className="flex-1 bg-[#0A1A1B] text-[#F0F7F7] px-5 py-4 rounded-xl border border-[#00F0FF]/50 focus:outline-none focus:ring-2 focus:ring-[#00F0FF] font-orbitron text-lg uppercase tracking-wider shadow-inner"
+                  maxLength={12}
                 />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-[#010F10] capitalize text-[18px] -tracking-[2%] font-orbitron font-[700] z-10">
-                Join Room
-              </span>
-            </button>
-          </div>
+                <button
+                  onClick={() => joinByCodeGuard.submit(() => handleJoinByCode())}
+                  disabled={loading || joinByCodeGuard.isSubmitting || !normalizedCode}
+                  className="bg-gradient-to-r from-[#00F0FF] to-[#FF00FF] text-black font-orbitron font-extrabold px-8 py-4 rounded-xl hover:opacity-90 transition-all shadow-lg hover:shadow-[#00F0FF]/50 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  title={!normalizedCode ? "Enter a game code to join" : undefined}
+                >
+                  {loading || joinByCodeGuard.isSubmitting ? "Joining…" : "Join"}
+                  <IoArrowForwardOutline className="w-6 h-6" />
+                </button>
+              </div>
+              {!normalizedCode && !error && (
+                <p className="text-slate-500 text-xs text-center">Enter a 6-character game code above to join.</p>
+              )}
+              {error && (
+                <p className="text-red-400 text-sm text-center bg-red-900/30 border border-red-500/30 p-3 rounded-lg font-orbitron" role="alert">
+                  {error}
+                </p>
+              )}
+            </div>
 
-          {/* Continue Existing Game */}
-          <div className="w-full flex flex-col gap-4 pt-6 border-t border-[#0E282A]">
-            <h3 className="text-[#F0F7F7] font-orbitron text-[18px] font-[600] text-center">
-              Continue Existing Game
-            </h3>
-            <input
-              type="number"
-              placeholder="Enter game ID (e.g., 12)"
-              value={continueGameId ?? ''}
-              onChange={(e) => setContinueGameId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full h-[52px] px-4 text-[#73838B] border-[1px] border-[#0E282A] rounded-[12px] outline-none focus:border-[#00F0FF] bg-transparent placeholder:text-[#455A64]"
-              disabled={loading}
-            />
-            <div className="flex flex-col sm:flex-row gap-4">
+            {/* Create New Game */}
+            <div className="space-y-6 text-center">
+              <h3 className="text-xl lg:text-2xl font-bold text-[#00F0FF] text-center font-orbitron">
+                Create New Game
+              </h3>
+              <p className="text-[#869298] text-sm mb-4">Want to host?</p>
               <button
-                type="button"
-                onClick={handleContinueGame}
-                className="relative group flex-1 h-[52px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-                disabled={loading || !continueGameId}
+                onClick={handleCreateNew}
+                className="bg-gradient-to-r from-[#00FFAA] to-[#00F0FF] text-black font-orbitron font-extrabold px-8 py-4 rounded-xl hover:opacity-90 transition-all shadow-lg hover:shadow-[#00FFAA]/50 transform hover:scale-105 w-full md:w-auto"
               >
-                <svg
-                  width="100%"
-                  height="52"
-                  viewBox="0 0 260 52"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"
-                >
-                  <path
-                    d="M10 1H250C254.373 1 256.996 6.85486 254.601 10.5127L236.167 49.5127C235.151 51.0646 233.42 52 231.565 52H10C6.96244 52 4.5 49.5376 4.5 46.5V9.5C4.5 6.46243 6.96243 4 10 4Z"
-                    fill="#00F0FF"
-                    stroke="#0E282A"
-                    strokeWidth={1}
-                  />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-[#010F10] text-[18px] font-orbitron font-[700] z-10">
-                  Continue Game
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={handleLeaveGame}
-                className="relative group flex-1 h-[52px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-50"
-                disabled={loading || !continueGameId}
-              >
-                <svg
-                  width="100%"
-                  height="52"
-                  viewBox="0 0 260 52"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"
-                >
-                  <path
-                    d="M10 1H250C254.373 1 256.996 6.85486 254.601 10.5127L236.167 49.5127C235.151 51.0646 233.42 52 231.565 52H10C6.96244 52 4.5 49.5376 4.5 46.5V9.5C4.5 6.46243 6.96243 4 10 4Z"
-                    fill="#FF4D4D"
-                    stroke="#0E282A"
-                    strokeWidth={1}
-                  />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-[#010F10] text-[18px] font-orbitron font-[700] z-10">
-                  Leave Game
-                </span>
+                Create New Game
               </button>
             </div>
           </div>
 
-          {PendingGames.length === 0 ? (
-            <p className="text-[#869298] text-center text-[16px] font-dmSans mt-8">
-              No pending games available. Create one to start playing!
-            </p>
-          ) : (
-            <div className="space-y-4 mt-8 pt-6 border-t border-[#0E282A]">
-              {PendingGames.map((game) => (
-                <motion.div
-                  key={game.code}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="w-full border-[1px] border-[#0E282A] rounded-[12px] overflow-hidden bg-[#010F10]/50 hover:border-[#00F0FF]/50 transition-all duration-300"
+          {/* Games Section */}
+          <div className="space-y-12">
+            {canAct && fetchError && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-red-950/30 border border-red-500/30" role="alert">
+                <p className="text-red-400 text-sm font-medium">{fetchError}</p>
+                <button
+                  type="button"
+                  onClick={() => fetchGames()}
+                  className="shrink-0 min-h-[44px] px-4 py-2 rounded-lg bg-[#00F0FF] text-[#010F10] font-bold font-orbitron text-sm hover:bg-[#00F0FF]/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F0FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A1A1B]"
                 >
-                  <div
-                    className="w-full p-4 flex justify-between items-center cursor-pointer hover:bg-[#0E282A]/50 transition-colors"
-                    onClick={() => toggleSettings(game.code)}
-                  >
-                    <h4 className="text-[#F0F7F7] text-[18px] uppercase font-dmSans font-[700] tracking-wide">
-                      {game.code}
-                    </h4>
-                    <div className="flex items-center gap-4">
-                      {renderIndicators(game)}
-                      {expandedGame === game.code ? (
-                        <IoArrowUp className="text-[#F0F7F7] w-5 h-5 transition-transform" />
-                      ) : (
-                        <IoArrowDown className="text-[#F0F7F7] w-5 h-5 transition-transform" />
-                      )}
-                    </div>
+                  Try again
+                </button>
+              </div>
+            )}
+            {canAct && (
+              <>
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-xl lg:text-2xl font-bold text-[#00F0FF] font-orbitron">
+                      Browse open games
+                    </h3>
+                    <select
+                      value={timeFilter}
+                      onChange={(e) => setTimeFilter(Number(e.target.value))}
+                      className="bg-[#0A1A1B] text-[#F0F7F7] px-3 py-2 rounded-lg border border-[#00F0FF]/50 focus:outline-none focus:ring-2 focus:ring-[#00F0FF] font-orbitron text-sm"
+                    >
+                      {timeOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <AnimatePresence>
-                    {expandedGame === game.code && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="p-4 pt-0 border-t border-[#0E282A]">
-                          {renderPrivateIndicator(game)}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-[#869298] text-[14px] font-dmSans">
-                            <p><strong>Players:</strong> {game.players_joined || 0}/{game.number_of_players}</p>
-                            <p><strong>Mode:</strong> {game.mode}</p>
-                            <p><strong>ID:</strong> {game.id}</p>
-                            <p><strong>Created:</strong> {game.created_at ? new Date(game.created_at).toLocaleString() : 'N/A'}</p>
+
+                  {fetchingPending ? (
+                    <>
+                      <p className="text-[#869298] text-sm text-center mb-2">Loading open games…</p>
+                      <SkeletonGameGrid count={6} gridClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" />
+                    </>
+                  ) : pendingGames.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {pendingGames.map((game) => (
+                        <div
+                          key={game.id}
+                          className="bg-[#010F10]/70 p-5 rounded-xl border border-[#00F0FF]/40 hover:border-[#00F0FF] transition-all shadow-md hover:shadow-[#00F0FF]/50 flex flex-col items-center justify-between group"
+                        >
+                          <div className="text-center mb-4">
+                            <p className="text-[#F0F7F7] font-orbitron font-bold text-lg">
+                              Code: {game.code}
+                            </p>
+                            <p className="text-[#869298] text-sm">
+                              Players: {game.players.length}/{game.number_of_players} • Pending
+                            </p>
                           </div>
-                          {renderGameSettings(game.settings)}
                           <button
-                            type="button"
-                            onClick={() => handleJoin(game.code)}
-                            className="relative group w-full h-[40px] bg-transparent border-none p-0 overflow-hidden cursor-pointer mt-4 disabled:opacity-50"
-                            disabled={loading}
+                            onClick={() => handleJoinPublicGame(game)}
+                            className="bg-gradient-to-r from-[#00F0FF] to-[#FF00FF] text-black font-orbitron font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-all shadow-lg hover:shadow-[#00F0FF]/50 transform hover:scale-105"
                           >
-                            <svg
-                              width="100%"
-                              height="40"
-                              viewBox="0 0 150 40"
-                              fill="none"
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="absolute top-0 left-0 w-full h-full transform scale-x-[-1]"
-                            >
-                              <path
-                                d="M6 1H144C148.373 1 150.996 5.85486 148.601 9.5127L130.167 37.5127C129.151 39.0646 127.42 40 125.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                                fill="#00F0FF"
-                                stroke="#0E282A"
-                                strokeWidth={1}
-                              />
-                            </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-[#010F10] capitalize text-[14px] font-orbitron font-[700] z-10">
-                              Join Room
-                            </span>
+                            Join
                           </button>
                         </div>
-                      </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={<Users className="w-14 h-14 text-[#00F0FF]/70" />}
+                      title="No open games right now"
+                      description="Create a new game or enter a 6-character code above to join an existing one."
+                      action={{ label: "Create new game", href: redirectCreateNew }}
+                      className="border-[#00F0FF]/20 bg-[#010F10]/50 text-left sm:text-center"
+                    />
+                  )}
+                </div>
+
+                {(fetchingRecent || activeRecentGames.length > 0) && (
+                  <div className="space-y-6">
+                    <h3 className="text-xl lg:text-2xl font-bold text-[#00F0FF] text-center font-orbitron">
+                      Continue Game
+                    </h3>
+                    {fetchingRecent ? (
+                      <>
+                        <p className="text-[#869298] text-sm text-center mb-2">Loading your games…</p>
+                        <SkeletonGameGrid count={3} gridClass="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" />
+                      </>
+                    ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {activeRecentGames.map((game) => (
+                        <button
+                          key={game.id}
+                          onClick={() => handleContinueGame(game)}
+                          className="bg-[#010F10]/70 p-5 rounded-xl border border-[#00F0FF]/40 hover:border-[#00F0FF] transition-all shadow-md hover:shadow-[#00F0FF]/50 flex flex-col items-center justify-between group"
+                        >
+                          <div className="text-center mb-4">
+                            <p className="text-[#F0F7F7] font-orbitron font-bold text-lg">
+                              Code: {game.code}
+                            </p>
+                            <p className="text-[#869298] text-sm">
+                              Players: {game.players.length}/{game.number_of_players} •{" "}
+                              {game.status === "PENDING" ? "Waiting" : "In Progress"}
+                            </p>
+                          </div>
+                          <IoArrowForwardOutline className="w-8 h-8 text-[#00F0FF] group-hover:translate-x-2 transition-transform" />
+                        </button>
+                      ))}
+                    </div>
                     )}
-                  </AnimatePresence>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {!canAct && (
+              <div className="mt-6 space-y-3 text-center">
+                <p className="text-yellow-400 text-sm bg-yellow-900/30 p-3 rounded-lg font-orbitron">
+                  Sign in to join or continue games.
+                </p>
+                <a
+                  href="/"
+                  className="inline-block px-6 py-3 bg-[#00F0FF]/20 text-[#00F0FF] font-orbitron font-bold rounded-lg border border-[#00F0FF]/50 hover:bg-[#00F0FF]/30 transition-all"
+                >
+                  Sign in (home)
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Links */}
+          <div className="flex justify-center mt-10 lg:mt-12">
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center text-[#0FF0FC] text-base font-orbitron hover:text-[#00D4E6] transition-colors hover:underline gap-2"
+            >
+              <IoHomeOutline className="w-5 h-5" />
+              Back to HQ
+            </button>
+          </div>
         </div>
       </main>
     </section>
   );
-};
-
-export default JoinRoom;
+}

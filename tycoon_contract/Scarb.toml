@@ -1,0 +1,38 @@
+[package]
+name = "tycoon"
+version = "1.8.0"
+edition = "2024_07"
+
+[cairo]
+sierra-replace-ids = true
+
+[scripts]
+test = "scarb cairo-test"
+migrate = "sozo build && sozo migrate"
+# One-shot: register "alice" then create AI game (2 AI, 1000 start). Run after migrate + init.
+register_then_create_ai = "sozo execute tycoon-player register_player sstr:alice --wait && sozo execute tycoon-game create_ai_game sstr:alice sstr:PUBLICGAME sstr:HAT 2 0 1000 --wait"
+# Register with username (default: alice). Requires Katana + migrate + init first.
+register = "sozo execute tycoon-player register_player sstr:alice --wait"
+# Create game (args: creator_username game_type player_symbol num_players code starting_balance stake_amount)
+create_game = "sozo execute tycoon-game create_game --wait"
+# Create AI game (args: creator_username game_type player_symbol num_ai code starting_balance)
+create_ai_game = "sozo execute tycoon-game create_ai_game --wait"
+join_game = "sozo execute tycoon-game join_game --wait"
+
+[dependencies]
+dojo = "1.8.0"
+openzeppelin_token = "3.0.0"
+starknet = "2.13.1"
+
+[[target.starknet-contract]]
+casm = true
+build-external-contracts = ["dojo::world::world_contract::world"]
+
+[tool.scarb]
+allow-prebuilt-plugins = ["dojo_cairo_macros"]
+
+[dev-dependencies]
+cairo_test = "2.13.1"
+dojo_cairo_test = "1.8.0"
+
+[profile.sepolia]

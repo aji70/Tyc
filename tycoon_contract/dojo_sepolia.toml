@@ -1,0 +1,43 @@
+[world]
+name = "Tycoon"
+description = "Tycoon game + rewards + TYC token (Dojo port of Solidity Tycoon.sol)"
+# Use a unique seed so a NEW world is deployed and your account is OWNER (avoids "does NOT have OWNER role")
+seed = "tycoon_sepolia"
+
+[namespace]
+default = "tycoon"
+
+[env]
+# rpc_url required in config (sozo unwraps it). Load secrets from .env.sepolia via migrate.sh
+rpc_url = "https://api.cartridge.gg/x/starknet/sepolia"
+# account_address and private_key from env: DOJO_ACCOUNT_ADDRESS, DOJO_PRIVATE_KEY
+world_address = "0x041167a2e9f249d46e52079a9eee47f75389801dd7e06fe933e275fde8fe742b"
+
+[writers]
+"tycoon" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-GameCounter" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-Game" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-GameSettings" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-CodeToGame" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-GameOrderToPlayer" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-GamePlayer" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-User" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-Registered" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-AddressToUsername" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-Stats" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-HouseBalance" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-GameConfig" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-PreviousGameCode" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-Claim" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-TurnsPlayed" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-VoucherRedeemValue" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-CollectibleMeta" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-CollectiblePrices" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-ShopListing" = ["tycoon-reward"]
+"tycoon-RewardConfig" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-RewardCounters" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-TycBalance" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-TycAllowance" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]
+"tycoon-TokenConfig" = ["tycoon-token"]
+"tycoon-TotalSupply" = ["tycoon-token"]
+"tycoon-PlayerConfig" = ["tycoon-game", "tycoon-player", "tycoon-reward", "tycoon-token"]

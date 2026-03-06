@@ -32,13 +32,13 @@ Tycoon Frontend is the user interface for the decentralized Monopoly game built 
 - Node.js >= 18.0.0
 - npm or yarn
 - Starknet wallet (e.g., Argent X or Braavos)
-- Access to the Tycoon backend contracts (see [Cairo repo](https://github.com/aji70/Tycoon))
+- Access to the Tycoon backend contracts (see [Cairo repo](https://github.com/SaboStudios/Tycoon))
 
 ### 1️⃣ Clone the Repository
 
 ```bash
-git clone https://github.com/aji70/tycoon-frontend-v1.git
-cd frontend
+git clone https://github.com/SaboStudios/Tycoon-frontend-v1.git
+cd Tycoon_Frontend
 2️⃣ Install Dependencies
 bash
 npm install

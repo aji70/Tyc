@@ -19,12 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"],
-      "@dojoengine/sdk": ["./node_modules/@dojoengine/sdk"]
-      // Remove starknet path if not needed
-    },
-
+      "@/*": ["./*"]
+    }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "next.config.mjs", "types/**/*.d.ts"],
-  "exclude": ["node_modules"]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "next.config.mjs"],
+  "exclude": ["node_modules", "**/node_modules/**"]
 }

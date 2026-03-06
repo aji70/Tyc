@@ -1,230 +1,342 @@
-'use client'
-import { useScroll, motion, useSpring } from 'framer-motion';
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { motion, useScroll, useSpring } from 'framer-motion';
 import Logo from './logo';
 import LogoIcon from '@/public/logo.png';
 import Link from 'next/link';
-import { House, LogOut, Volume2, VolumeOff, User, ShoppingBag } from 'lucide-react';
-import { useState } from 'react';
-import useSound from 'use-sound'
-import { useWalletContext } from '@/context/wallet-provider';
+import { usePathname, useSearchParams, useRouter } from 'next/navigation';
+import { House, Volume2, VolumeOff, User, ShoppingBag, Trophy, Globe, Swords, MessageCircle, Wallet, BookOpen } from 'lucide-react';
+import useSound from 'use-sound';
+import { useAppKit, useAppKitAccount, useAppKitNetwork } from '@reown/appkit/react';
+import { PiUserCircle } from 'react-icons/pi';
 import Image from 'next/image';
+import avatar from '@/public/avatar.jpg';
 import WalletConnectModal from './wallet-connect-modal';
 import WalletDisconnectModal from './wallet-disconnect-modal';
-import { PiUserCircle } from 'react-icons/pi';
-import avatar from "@/public/avatar.jpg";
+import NetworkSwitcherModal from './network-switcher-modal';
+import { useProfileAvatar } from '@/context/ProfileContext';
+import { useOnlineUsers } from '@/hooks/useOnlineUsers';
+import { usePrivy } from '@privy-io/react-auth';
+import { useGuestAuthOptional } from '@/context/GuestAuthContext';
+
+const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
 
 const NavBar = () => {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { scrollYProgress } = useScroll();
 
-    const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-    const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
-    const { account, connectWallet, disconnectWallet, connectors } =
-        useWalletContext();
+  const isGamePage = pathname?.includes('/board') || pathname?.includes('game-play') || pathname?.includes('ai-play');
+  const shopHref = isGamePage && pathname
+    ? `/game-shop?returnTo=${encodeURIComponent(pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : ''))}`
+    : '/game-shop';
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001,
+  });
 
+  const { open } = useAppKit();
+  const { address, isConnected } = useAppKitAccount();
+  const { caipNetwork, chainId } = useAppKitNetwork();
+  const { onlineCount, onlineUsers } = useOnlineUsers(isConnected ? address : undefined);
+  const [onlineDropdownOpen, setOnlineDropdownOpen] = useState(false);
+  const onlineDropdownRef = useRef<HTMLDivElement>(null);
 
-    const handleWalletSelect = (walletId: string) => {
-        const connector = connectors.find((c) => c.id === walletId);
-        if (connector) {
-            connectWallet(connector);
-        }
-        setIsConnectModalOpen(false);
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (onlineDropdownRef.current && !onlineDropdownRef.current.contains(e.target as Node)) {
+        setOnlineDropdownOpen(false);
+      }
     };
-    const handleConnectWallet = () => {
-        setIsConnectModalOpen(true);
-    };
-    const handleWalletClick = () => {
-        setIsDisconnectModalOpen(true);
-    };
-    const handleDisconnect = () => {
-        disconnectWallet();
-        setIsDisconnectModalOpen(false);
-    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
 
-    const [isSoundPlaying, setIsSoundPlaying] = useState(false);
-    const { scrollYProgress } = useScroll();
+  // Prioritize shortName if available (e.g., "Ethereum"), fall back to name, then chain ID
+  const networkDisplay =  caipNetwork?.name ?? (chainId ? `Chain ${chainId}` : 'Network');
 
-    const scaleX = useSpring(scrollYProgress, {
-        stiffness: 100,
-        damping: 30,
-        restDelta: 0.001,
-    });
+  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+  const [play, { pause }] = useSound('/sound/monopoly-theme.mp3', {
+    volume: 0.5,
+    loop: true,
+  });
 
-    const [play, { pause }] = useSound('/sound/monopoly-theme.mp3', {
-        volume: 0.5,
-        loop: true,
-    })
+  const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
+  const profileAvatar = useProfileAvatar();
 
-    const toggleSound = () => {
-        if (isSoundPlaying) {
-            pause()
-            setIsSoundPlaying(false)
-        } else {
-            play()
-            setIsSoundPlaying(true)
-        }
+  const { ready, authenticated, login, logout, user } = usePrivy();
+  const guestAuth = useGuestAuthOptional();
+  const guestUser = guestAuth?.guestUser ?? null;
+  const isPrivyAuthed = ready && authenticated;
+
+  const toggleSound = () => {
+    if (isSoundPlaying) {
+      pause();
+      setIsSoundPlaying(false);
+    } else {
+      play();
+      setIsSoundPlaying(true);
     }
+  };
 
-    return (
-        <>
-            <motion.div
-                className="fixed top-0 left-0 right-0 bg-[#0FF0FC] origin-[0%] h-[2px] z-[42]"
-                style={{ scaleX }}
-            />
+  // Prefetch main nav routes when idle so navigation feels instant
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      PREFETCH_ROUTES.forEach((r) => router.prefetch(r));
+    }, 2000);
+    return () => window.clearTimeout(t);
+  }, [router]);
 
-            <header className="w-full h-[87px] flex items-center justify-between px-4 md:px-8 bg-[linear-gradient(180deg,rgba(1,15,16,0.12)_0%,rgba(8,50,52,0.12)_100%)] backdrop-blur-sm">
-                {/* Logo */}
-                <Logo className="cursor-pointer md:w-[50px] w-[45px]" image={LogoIcon} href="/" />
-                {/* Icons */}
-                <div className="flex items-center gap-[4px]">
-                    {/* status to be shown when connected */}
-                    {
-                        account && (
-                            <button type="button" className="w-[133px] h-[40px] hidden border-[1px] border-[#0E282A] hover:border-[#003B3E] transition-all duration-300 ease-in-out rounded-[12px] md:flex justify-center items-center gap-2 bg-[#011112] text-[#AFBAC0] cursor-pointer">
-                                <PiUserCircle className='w-[16px] h-[16px]' />
-                                <span className="text-[12px] font-[400] font-dmSans">0 friends online</span>
-                            </button>
-                        )
-                    }
+  return (
+    <>
+      {/* Progress Bar */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 bg-[#0FF0FC] origin-[0%] h-[2px] z-[40]"
+        style={{ scaleX }}
+      />
 
-                    {/* Profile button (only when connected) */}
-                    {account && (
-                        <Link
-                            href="/profile"
-                            className="w-[80px] h-[40px] border-[1px] border-[#0E282A] hover:border-[#003B3E] transition-all duration-300 ease-in-out rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
-                        >
-                            <User className="w-[16px] h-[16px]" />
-                            <span className="text-[12px] font-[400] font-dmSans">Profile</span>
-                        </Link>
-                    )}
+      {/* Navbar */}
+      <header className="w-full h-[87px] flex items-center justify-between px-4 md:px-8 bg-[linear-gradient(180deg,rgba(1,15,16,0.12)_0%,rgba(8,50,52,0.12)_100%)] backdrop-blur-sm relative z-[50]">
+        <Logo className="cursor-pointer md:w-[50px] w-[45px]" image={LogoIcon} href="/" />
 
-                    {/* Shop button (only when connected) */}
-                    {account && (
-                        <Link
-                            href="/game-shop"
-                            className="w-[70px] h-[40px] border-[1px] border-[#0E282A] hover:border-[#003B3E] transition-all duration-300 ease-in-out rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC]"
-                        >
-                            <ShoppingBag className="w-[16px] h-[16px]" />
-                            <span className="text-[12px] font-[400] font-dmSans">Shop</span>
-                        </Link>
-                    )}
-
-                    {/* home icon */}
-                    <Link href="/" className="w-[40px] h-[40px] border-[1px] border-[#0E282A] hover:border-[#003B3E] transition-all duration-300 ease-in-out rounded-[12px] hidden md:flex justify-center items-center bg-[#011112] text-white cursor-pointer">
-                        <House className='w-[16px] h-[16px]' />
-                    </Link>
-                    {/* Sound/Audio icon */}
-                    <button type='button' onClick={toggleSound} className="w-[40px] h-[40px] border-[1px] border-[#0E282A] hover:border-[#003B3E] transition-all duration-300 ease-in-out rounded-[12px] hidden md:flex justify-center items-center bg-[#011112] text-white cursor-pointer">
-                        {isSoundPlaying ? (
-                            <Volume2 className='w-[16px] h-[16px]' />
-                        ) : (
-                            <VolumeOff className='w-[16px] h-[16px]' />
-                        )}
-                    </button>
-
-                    {/* Connect Button */}
-                    {
-                        !account ? (
-                            <button
-                                type="button"
-                                onClick={handleConnectWallet}
-                                className="relative group w-[157px] h-[41px] bg-transparent border-none p-0 overflow-hidden cursor-pointer"
-                            >
-                                <svg
-                                    width="157"
-                                    height="41"
-                                    viewBox="0 0 157 41"
-                                    fill="none"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="absolute top-0 left-0 w-full h-full"
-                                >
-                                    <path
-                                        d="M6 1H150.899C155.272 1 157.896 5.85486 155.501 9.5127L137.167 37.5127C136.151 39.0646 134.42 40 132.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                                        fill="#011112"
-                                        stroke="#0E282A"
-                                        strokeWidth={1}
-                                        className='group-hover:stroke-[#003B3E] transition-all duration-300 ease-in-out'
-                                    />
-                                </svg>
-                                <span className="absolute inset-0 flex items-center ml-8 text-[#00F0FF] text-[14px] leading-[24px] font-orbitron font-medium z-10">
-                                    Connect
-                                </span>
-                            </button>
-                        ) : (
-                            <div className="flex justify-center items-center" >
-                                <div
-                                    className="w-[180px] h-[41px] relative bg-transparent border-none p-0 overflow-hidden cursor-pointer"
-                                >
-                                    <svg
-                                        width="180"
-                                        height="41"
-                                        viewBox="0 0 180 41"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M6 1H174C178.373 1 180.996 5.85486 178.601 9.5127L160.167 37.5127C159.151 39.0646 157.42 40 155.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
-                                            fill="#011112"
-                                            stroke="#0E282A"
-                                            strokeWidth={1}
-                                            className="group-hover:stroke-[#003B3E] transition-all duration-300 ease-in-out"
-                                        />
-                                    </svg>
-                                    <div className="absolute inset-0 flex items-center ml-5 text-[#00F0FF] font-orbitron font-medium z-10">
-                                        <div className="h-6 w-6 rounded-full border-[1px] border-[#0FF0FC] overflow-hidden">
-                                            <Image
-                                                src={avatar}
-                                                alt="Wallet Avatar"
-                                                width={200}
-                                                height={200}
-                                                quality={100}
-                                                priority
-                                                className="object-cover w-full h-full"
-                                            />
-                                        </div>
-                                        <span className="text-[14px] font-medium ml-2">
-                                            {account.slice(0, 4)}…{account.slice(-4)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* disconnect btn */}
-                                <button
-                                    type="button"
-                                    onClick={handleWalletClick}
-                                    className="relative right-3 group w-[62px] h-[41px] bg-transparent border-none p-0 overflow-hidden cursor-pointer"
-                                >
-                                    <svg width="62" height="41" viewBox="0 0 62 41" fill="none" className="absolute top-0 left-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M62 34.5C62 37.8137 59.3137 40.5 56 40.5L6.16273 40.5C1.38034 40.5 -1.47997 35.1785 1.15847 31.1898L19.6798 3.1898C20.7908 1.51023 22.6703 0.5 24.684 0.5H56C59.3137 0.5 62 3.18629 62 6.5V34.5Z" fill="#003B3E"
-                                            stroke="#003B3E"
-                                            strokeWidth={1}
-                                        />
-                                    </svg>
-
-                                    <span className="absolute inset-0 flex items-center justify-center text-[#0FF0FC] z-10">
-                                        <LogOut className="w-[16px] h-[16px]" />
-                                    </span>
-                                </button>
-                            </div>
-                        )
-                    }
-
+        <div className="flex items-center gap-[4px]">
+          {/* Online players (only when connected) */}
+          {isConnected && (
+            <div className="relative hidden md:block" ref={onlineDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setOnlineDropdownOpen((o) => !o)}
+                className="w-[133px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] flex justify-center items-center gap-2 bg-[#011112] text-[#AFBAC0]"
+              >
+                <PiUserCircle className="w-[16px] h-[16px]" />
+                <span className="text-[12px] font-[400] font-dmSans">
+                  {onlineCount} {onlineCount === 1 ? 'player' : 'players'} online
+                </span>
+              </button>
+              {onlineDropdownOpen && (
+                <div className="absolute top-full right-0 mt-1 w-56 max-h-64 overflow-y-auto rounded-xl border border-[#0E282A] bg-[#011112] shadow-xl z-50 py-2">
+                  <p className="px-3 py-1 text-[11px] text-[#869298] uppercase tracking-wide">Online now</p>
+                  {onlineUsers.length === 0 ? (
+                    <p className="px-3 py-2 text-[12px] text-[#AFBAC0]">No one else online</p>
+                  ) : (
+                    onlineUsers.map((u, i) => (
+                      <div key={u.userId ?? u.address ?? i} className="px-3 py-1.5 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-[12px] text-[#F0F7F7] truncate">
+                          {u.username || (u.address ? `${u.address.slice(0, 6)}...${u.address.slice(-4)}` : 'Anonymous')}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
+              )}
+            </div>
+          )}
 
-            </header>
+          {/* Profile button (only when connected) */}
+          {isConnected && (
+            <Link
+              href="/profile"
+              onMouseEnter={() => router.prefetch('/profile')}
+              className="w-[80px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            >
+              <User className="w-[16px] h-[16px]" />
+              <span className="text-[12px] font-[400] font-dmSans">Profile</span>
+            </Link>
+          )}
 
+          {/* Perk Shop button (only when connected) */}
+          {isConnected && (
+            <Link
+              href={shopHref}
+              onMouseEnter={() => router.prefetch('/game-shop')}
+              className="min-w-[90px] h-[40px] px-3 border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC]"
+            >
+              <ShoppingBag className="w-[16px] h-[16px]" />
+              <span className="text-[12px] font-[400] font-dmSans">Perk Shop</span>
+            </Link>
+          )}
 
-            <WalletConnectModal
-                isOpen={isConnectModalOpen}
-                onClose={() => setIsConnectModalOpen(false)}
-                onSelect={handleWalletSelect}
-            />
+          {/* Leaderboard button (only when connected) */}
+          {isConnected && (
+            <Link
+              href="/leaderboard"
+              onMouseEnter={() => router.prefetch('/leaderboard')}
+              className="w-[100px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            >
+              <Trophy className="w-[16px] h-[16px]" />
+              <span className="text-[12px] font-[400] font-dmSans">Leaderboard</span>
+            </Link>
+          )}
 
-            <WalletDisconnectModal
-                isOpen={isDisconnectModalOpen}
-                onClose={() => setIsDisconnectModalOpen(false)}
-                onDisconnect={handleDisconnect}
-            />
-        </>
-    )
-}
+          {/* Tournaments button (only when connected) */}
+          {isConnected && (
+            <Link
+              href="/tournaments"
+              className="w-[95px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            >
+              <Swords className="w-[16px] h-[16px]" />
+              <span className="text-[12px] font-[400] font-dmSans">Tournaments</span>
+            </Link>
+          )}
 
-export default NavBar
+          {/* Rooms button (only when connected) — general lobby with chat */}
+          {isConnected && (
+            <Link
+              href="/rooms"
+              className="w-[75px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            >
+              <MessageCircle className="w-[16px] h-[16px]" />
+              <span className="text-[12px] font-[400] font-dmSans">Rooms</span>
+            </Link>
+          )}
+
+          {/* How to Play — always visible */}
+          <Link
+            href="/how-to-play"
+            className="w-[95px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+          >
+            <BookOpen className="w-[16px] h-[16px]" />
+            <span className="text-[12px] font-[400] font-dmSans">How to Play</span>
+          </Link>
+
+          {/* Home button */}
+          <Link
+            href="/"
+            aria-label="Home"
+            className="w-[40px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center bg-[#011112] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#011112]"
+          >
+            <House className="w-[16px] h-[16px]" />
+          </Link>
+
+          {/* Sound button */}
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-label={isSoundPlaying ? "Sound on" : "Sound off"}
+            className="w-[40px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center bg-[#011112] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#011112]"
+          >
+            {isSoundPlaying ? (
+              <Volume2 className="w-[16px] h-[16px]" />
+            ) : (
+              <VolumeOff className="w-[16px] h-[16px]" />
+            )}
+          </button>
+
+          {/* Wallet, guest, or Privy: wallet when connected; guest when signed in from hero; Privy sign in / signed in in nav */}
+          {isConnected ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsNetworkModalOpen(true)}
+                className="px-4 py-3 rounded-[12px] bg-[#003B3E] hover:bg-[#005458] border border-[#00F0FF]/30 text-[#00F0FF] font-orbitron font-medium text-sm transition-all flex items-center gap-2 shadow-md"
+              >
+                <Globe className="w-4 h-4" />
+                <span className="truncate max-w-[120px]">{networkDisplay}</span>
+              </button>
+              <div className="flex items-center gap-3 px-5 py-3 rounded-[12px] border border-[#0E282A] bg-[#011112] text-[#00F0FF] font-orbitron">
+                <div className="h-8 w-8 rounded-full border-2 border-[#0FF0FC] overflow-hidden shadow-lg shrink-0">
+                  {profileAvatar ? (
+                    <img src={profileAvatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <Image src={avatar} alt="Wallet" width={32} height={32} className="object-cover w-full h-full" />
+                  )}
+                </div>
+                <span className="text-sm tracking-wider">
+                  {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsDisconnectModalOpen(true)}
+                className="px-4 py-3 rounded-[12px] bg-red-900/40 hover:bg-red-800/60 text-red-400 border border-red-600/40 font-medium text-sm transition-all"
+              >
+                Disconnect
+              </button>
+            </div>
+          ) : guestUser ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => open()}
+                className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Connect wallet
+              </button>
+              <span className="px-3 py-2 rounded-[12px] border border-[#0E282A] bg-[#011112] text-[#00F0FF] text-xs font-dmSans">
+                Guest: {guestUser.username}
+              </span>
+              <button
+                type="button"
+                onClick={() => guestAuth?.logoutGuest()}
+                className="px-4 py-2 rounded-[12px] border border-[#0E282A] hover:border-[#003B3E] bg-[#011112] text-[#869298] hover:text-[#00F0FF] text-xs font-dmSans"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : isPrivyAuthed ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => open()}
+                className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Connect wallet
+              </button>
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="px-4 py-2 rounded-[12px] border border-[#0E282A] hover:border-[#003B3E] bg-[#011112] text-[#00F0FF] text-xs font-dmSans"
+              >
+                {typeof user?.email === 'string' ? user.email : (user?.email as { address?: string })?.address ?? 'Signed in'} · Log out
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => login()}
+                className="px-4 py-2 rounded-[12px] bg-[#0FF0FC]/80 hover:bg-[#0FF0FC]/40 text-[#0D191B] font-medium transition"
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                onClick={() => open()}
+                className="hidden md:flex px-4 py-2 rounded-[12px] border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-sm font-medium hover:border-[#00F0FF]/50 transition-all items-center gap-2"
+              >
+                <Wallet className="w-4 h-4" />
+                Connect wallet
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Network Switcher Modal */}
+      <NetworkSwitcherModal
+        isOpen={isNetworkModalOpen}
+        onClose={() => setIsNetworkModalOpen(false)}
+      />
+
+      {/* Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
+      />
+
+      {/* Wallet Disconnect Modal */}
+      <WalletDisconnectModal
+        isOpen={isDisconnectModalOpen}
+        onClose={() => setIsDisconnectModalOpen(false)}
+      />
+    </>
+  );
+};
+
+export default NavBar;

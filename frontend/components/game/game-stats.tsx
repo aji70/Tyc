@@ -1,448 +1,488 @@
-'use client';
+"use client";
+import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAccount, useChainId } from "wagmi";
+import { useGetUsername, useIsRegistered } from "@/context/ContractProvider";
+import { toast } from "react-toastify";
+import { BarChart2, Trophy, Wallet, Crown, Users, Loader2 } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import herobg from "@/public/heroBg.png";
+import { apiClient } from "@/lib/api";
+import { ApiResponse } from "@/types/api";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAccount } from '@starknet-react/core';
-import { useGameActions } from '@/hooks/useGameActions';
-import { usePlayerActions } from '@/hooks/usePlayerActions';
-import { BarChart2, Trophy, Wallet, Clock } from 'lucide-react';
-import { shortString } from 'starknet';
-import Image from 'next/image';
+function chainIdToLeaderboardChain(chainId: number): string {
+  if (chainId === 137 || chainId === 80001) return "POLYGON";
+  if (chainId === 42220 || chainId === 44787) return "CELO";
+  if (chainId === 8453 || chainId === 84531) return "BASE";
+  return "CELO";
+}
 
 interface PlayerStats {
-  totalGamesPlayed: number;
-  totalGamesWon: number;
-  balance: number;
+  totalGames: number;
+  wins: number;
+  tokensEarned: number;
   ranking: number;
+  winRate: string;
 }
 
 interface LeaderboardEntry {
   username: string;
-  address: string;
-  totalGamesPlayed: number;
-  totalGamesWon: number;
+  totalGames: number;
+  wins: number;
   ranking: number;
-}
-
-interface GameDetails {
-  id: number;
-  winner: string | null;
-  winnerUsername: string;
-  createdBy: string;
-  createdByUsername: string;
-  status: string;
-  players: { address: string; username: string; balance: number }[];
-  duration: number; // in seconds
+  avatar?: string;
 }
 
 const GameStats: React.FC = () => {
   const router = useRouter();
-  const { account, address } = useAccount();
-  const gameActions = useGameActions();
-  const playerActions = usePlayerActions();
-  const [playerStats, setPlayerStats] = useState<PlayerStats>({ totalGamesPlayed: 0, totalGamesWon: 0, balance: 0, ranking: 0 });
+  const { address, isConnecting } = useAccount();
+  const chainId = useChainId();
+  const { data: isUserRegistered, error: registeredError } = useIsRegistered(address);
+  const { data: username } = useGetUsername(address);
+  const [playerStats] = useState<PlayerStats>({
+    totalGames: 42,
+    wins: 15,
+    tokensEarned: 2500,
+    ranking: 3,
+    winRate: "35.7%",
+  });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [gameIdQuery, setGameIdQuery] = useState('');
-  const [gameDetails, setGameDetails] = useState<GameDetails | null>(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const [gameIdQuery, setGameIdQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [playerUsername, setPlayerUsername] = useState<string>('Player');
+  const [queriedGame, setQueriedGame] = useState<{
+    code: string;
+    status: string;
+    players: Array<{ username: string; balance: number; position: number; user_id?: number }>;
+    winner_id?: number | null;
+  } | null>(null);
+  const [queryError, setQueryError] = useState<string | null>(null);
+
+  const chainParam = chainIdToLeaderboardChain(chainId);
+  const fetchLeaderboard = useCallback(async () => {
+    setLeaderboardLoading(true);
+    setLeaderboardError(null);
+    try {
+      const res = await apiClient.get<unknown>("/users/leaderboard", {
+        chain: chainParam,
+        type: "wins",
+        limit: 10,
+      });
+      const raw = Array.isArray(res?.data) ? res.data : (res as { data?: unknown[] })?.data;
+      const list = (raw ?? []) as Array<{ username?: string; games_played?: number; game_won?: number }>;
+      const filtered = list.filter((row) => !String(row?.username ?? "").includes("AI_"));
+      setLeaderboard(
+        filtered.map((row, i) => ({
+          username: String(row?.username ?? "—"),
+          totalGames: Number(row?.games_played ?? 0),
+          wins: Number(row?.game_won ?? 0),
+          ranking: i + 1,
+        }))
+      );
+    } catch (err: unknown) {
+      const msg = err && typeof err === "object" && "message" in err ? String((err as { message: string }).message) : "Failed to load leaderboard";
+      setLeaderboardError(msg);
+      setLeaderboard([]);
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, [chainParam]);
 
   useEffect(() => {
-    if (!address) {
-      setError('Please connect your Starknet account to view stats.');
-      setPlayerUsername('Guest');
-      return;
-    }
-    fetchPlayerUsername();
-    fetchStats();
-  }, [address]);
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
-  const fetchPlayerUsername = async () => {
-    if (!address) return;
-    try {
-      const playerData = await playerActions.retrievePlayer(String(address).toLowerCase());
-      const decodedUsername = shortString.decodeShortString(playerData.username) || `Player_${address.slice(0, 6)}`;
-      setPlayerUsername(decodedUsername);
-    } catch (err: any) {
-      console.error('Error fetching player username:', err);
-      setPlayerUsername(`Player_${address.slice(0, 6)}`);
-    }
-  };
-
-  const fetchStats = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const playerAddr = String(address).toLowerCase();
-      // Fetch connected player's stats
-      const playerData = await playerActions.retrievePlayer(playerAddr);
-      if (!playerData.is_registered) {
-        throw new Error('Player not registered.');
-      }
-
-      const playerStatsData: PlayerStats = {
-        totalGamesPlayed: Number(playerData.total_games_played),
-        totalGamesWon: Number(playerData.total_games_won),
-        balance: Number(playerData.balance),
-        ranking: 0, // Will be calculated after leaderboard is built
-      };
-
-      // Fetch leaderboard data
-      const leaderboardData: LeaderboardEntry[] = [];
-      // Ideally, fetch a list of registered players from the contract
-      // For now, we'll assume we have a way to get player addresses or use game data
-      const lastGameId = await gameActions.lastGame();
-      const totalGamesCount = Number(lastGameId) || 0;
-      const playerAddresses = new Set<string>();
-
-      // Collect unique player addresses from games
-      for (let i = 1; i <= totalGamesCount; i++) {
-        try {
-          const gameData = await gameActions.getGame(i);
-          if (!gameData) continue;
-          const gamePlayers = (gameData.game_players || []).map((addr: string) => String(addr).toLowerCase());
-          gamePlayers.forEach((addr: string) => playerAddresses.add(addr));
-        } catch (err) {
-          console.error(`Error fetching game ${i}:`, err);
+  useEffect(() => {
+    if (registeredError) {
+      console.error("Registered error:", registeredError);
+      toast.error(
+        registeredError?.message || "Failed to check registration status",
+        {
+          position: "top-right",
+          autoClose: 5000,
         }
-      }
-
-      // Fetch player data for each address
-      await Promise.all(
-        Array.from(playerAddresses).map(async (addr) => {
-          try {
-            const player = await playerActions.retrievePlayer(addr);
-            if (player.is_registered) {
-              const decodedUsername = shortString.decodeShortString(player.username) || `Player_${addr.slice(0, 6)}`;
-              leaderboardData.push({
-                username: decodedUsername,
-                address: addr,
-                totalGamesPlayed: Number(player.total_games_played),
-                totalGamesWon: Number(player.total_games_won),
-                ranking: 0,
-              });
-            }
-          } catch (err) {
-            console.error(`Error fetching player ${addr}:`, err);
-          }
-        })
       );
-
-      // Sort leaderboard by totalGamesWon, then totalGamesPlayed
-      leaderboardData.sort((a, b) => b.totalGamesWon - a.totalGamesWon || b.totalGamesPlayed - a.totalGamesPlayed);
-      leaderboardData.forEach((entry, index) => {
-        entry.ranking = index + 1;
-        if (entry.address === playerAddr) {
-          playerStatsData.ranking = index + 1;
-        }
-      });
-
-      setPlayerStats(playerStatsData);
-      setLeaderboard(leaderboardData.slice(0, 5));
-    } catch (err: any) {
-      setError(err.message || 'Failed to load game stats.');
-      console.error('Error in fetchStats:', err);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [registeredError]);
 
   const handleGameIdQuery = async () => {
-    if (!gameIdQuery || isNaN(Number(gameIdQuery))) {
-      setError('Please enter a valid Game ID.');
+    const code = gameIdQuery.trim().toUpperCase().replace(/^#/, "");
+    if (!code || code.length !== 6) {
+      toast.error("Enter a 6-character game code", { position: "top-right", autoClose: 3000 });
+      setQueryError("Enter a 6-character game code.");
+      setQueriedGame(null);
       return;
     }
     setLoading(true);
-    setError(null);
+    setQueryError(null);
+    setQueriedGame(null);
     try {
-      const gameId = Number(gameIdQuery);
-      const gameData = await gameActions.getGame(gameId);
-      if (!gameData) {
-        setError('Game not found.');
-        setGameDetails(null);
-        setLoading(false);
+      const res = await apiClient.get<ApiResponse>(`/games/code/${encodeURIComponent(code)}`);
+      const data = (res?.data as { success?: boolean; data?: unknown })?.data;
+      if (!res?.data?.success || !data) {
+        setQueryError("Game not found.");
+        toast.error("Game not found", { position: "top-right", autoClose: 3000 });
         return;
       }
-
-      const statusVariant = gameData.status?.variant;
-      const status = statusVariant
-        ? 'Ended' in statusVariant
-          ? 'Ended'
-          : 'Ongoing' in statusVariant
-          ? 'Ongoing'
-          : 'Unknown'
-        : 'Unknown';
-
-      const gamePlayers = (gameData.game_players || []).map((addr: string) => String(addr).toLowerCase());
-      const players = await Promise.all(
-        gamePlayers.map(async (addr: string) => {
-          const playerData = await playerActions.retrievePlayer(addr);
-          const decodedUsername = shortString.decodeShortString(playerData.username) || `Player_${addr.slice(0, 6)}`;
-          const gamePlayerData = await gameActions.getPlayer(addr, gameId);
-          return {
-            address: addr,
-            username: decodedUsername,
-            balance: Number(gamePlayerData.balance || 0),
-          };
-        })
-      );
-
-      const winnerAddress = gameData.winner && gameData.winner !== '0' ? String(gameData.winner).toLowerCase() : null;
-      const winnerUsername =
-        winnerAddress && players.find((p) => p.address === winnerAddress)?.username || 'No winner';
-
-      const createdByAddress = String(gameData.created_by).toLowerCase();
-      let createdByUsername = 'Unknown Creator';
-      if (createdByAddress && createdByAddress !== '0') {
-        try {
-          const playerData = await playerActions.retrievePlayer(createdByAddress);
-          createdByUsername = shortString.decodeShortString(playerData.username) || `Player_${createdByAddress.slice(0, 6)}`;
-        } catch (err) {
-          console.error('Error fetching createdBy username:', err);
-        }
-      }
-
-      const duration = 3600; // Placeholder
-
-      setGameDetails({
-        id: gameId,
-        winner: winnerAddress,
-        winnerUsername,
-        createdBy: createdByAddress,
-        createdByUsername,
-        status,
-        players,
-        duration,
+      const game = data as { code?: string; status?: string; players?: unknown[]; winner_id?: number | null };
+      const players = (game.players ?? []) as Array<Record<string, unknown>>;
+      setQueriedGame({
+        code: game.code ?? code,
+        status: game.status ?? "UNKNOWN",
+        players: players.map((p) => ({
+          username: String(p.username ?? p.address ?? "—"),
+          balance: Number(p.balance ?? 0),
+          position: Number(p.position ?? 0),
+          user_id: p.user_id != null ? Number(p.user_id) : undefined,
+        })),
+        winner_id: game.winner_id ?? null,
       });
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch game details.');
-      setGameDetails(null);
-      console.error('Error in handleGameIdQuery:', err);
+      toast.success("Game loaded", { position: "top-right", autoClose: 2000 });
+    } catch {
+      setQueryError("Could not load game. Check the code and try again.");
+      toast.error("Could not load game", { position: "top-right", autoClose: 3000 });
     } finally {
       setLoading(false);
     }
   };
 
+  if (isConnecting) {
+    return (
+      <div className="w-full h-screen flex items-center justify-center">
+        <p className="font-orbitron text-[#00F0FF] text-[16px]">
+          Connecting to wallet...
+        </p>
+      </div>
+    );
+  }
+
+  if (!address || !isUserRegistered) {
+    return (
+      <div className="w-full min-h-screen bg-gradient-to-b from-[#010F10] to-[#0E1415] flex flex-col items-center justify-center">
+        <p className="font-orbitron text-[#00F0FF] text-[16px] mb-4 text-center">
+          {address
+            ? "Please register to view your game stats."
+            : "Please connect your wallet to view game stats."}
+        </p>
+        <Link
+          href="/"
+          className="relative group w-[200px] h-[40px] bg-transparent border-none p-0 overflow-hidden cursor-pointer"
+        >
+          <svg
+            width="200"
+            height="40"
+            viewBox="0 0 200 40"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="absolute top-0 left-0 w-full h-full"
+          >
+            <path
+              d="M6 1H194C198.373 1 200.996 5.85486 198.601 9.5127L180.167 37.5127C179.151 39.0646 177.42 40 175.565 40H6C2.96244 40 0.5 37.5376 0.5 34.5V6.5C0.5 3.46243 2.96243 1 6 1Z"
+              fill="#0E1415"
+              stroke="#003B3E"
+              strokeWidth={1}
+              className="group-hover:stroke-[#00F0FF] transition-all duration-300 ease-in-out"
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[#00F0FF] capitalize text-[12px] font-dmSans font-medium z-10">
+            Back to Home
+          </span>
+        </Link>
+      </div>
+    );
+  }
+
   return (
-    <section className="w-full min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-cyan-900 text-white relative overflow-x-hidden p-4">
+    <section className="z-0 w-full min-h-screen relative overflow-x-hidden bg-gradient-to-b from-[#010F10] to-[#0E1415]">
       {/* Background Image */}
-      <div className="absolute inset-0 z-0">
+      <div className="w-full h-full absolute inset-0 overflow-hidden">
         <Image
-          src="/heroBg.png"
-          alt="Cyberpunk Background"
-          className="w-full h-full object-cover opacity-20"
-          width={1920}
-          height={1080}
+          src={herobg}
+          alt="Hero Background"
+          className="w-full h-full object-cover hero-bg-zoom opacity-50"
+          width={1440}
+          height={1024}
           priority
           quality={100}
-          onError={() => console.error('Failed to load background image')}
         />
       </div>
 
-      {/* Content */}
-      <main className="relative z-10 w-full max-w-[1000px] mx-auto flex flex-col items-center gap-8 py-8">
-        <h1 className="font-orbitron text-4xl md:text-6xl lg:text-7xl font-bold text-cyan-300 uppercase tracking-tight text-center animate-pulse-slow">
+      {/* Overlay for readability */}
+      <div className="w-full h-full absolute inset-0 bg-gradient-to-b from-transparent via-[#010F10]/80 to-[#010F10]"></div>
+
+      {/* Header */}
+      <header className="w-full h-[87px] flex items-center justify-between px-4 md:px-8 bg-[linear-gradient(180deg,rgba(1,15,16,0.12)_0%,rgba(8,50,52,0.12)_100%)] backdrop-blur-sm relative z-[50] border-b border-[#003B3E]">
+        <Link
+          href="/"
+          className="text-[#00F0FF] text-xl font-bold flex items-center gap-2 hover:text-[#0FF0FC] transition-colors"
+        >
+          ← Back to Tycoon
+        </Link>
+        <h1 className="text-2xl uppercase font-kronaOne text-transparent bg-clip-text bg-gradient-to-r from-[#00F0FF] to-[#0FF0FC]">
           Game Stats
         </h1>
-        <p className="font-orbitron text-lg md:text-xl text-cyan-200 font-semibold text-center">
-          Welcome back, {playerUsername}{playerStats.ranking ? ` (Rank #${playerStats.ranking})` : ''}!
-        </p>
+        <div className="w-10" /> {/* Spacer */}
+      </header>
+
+      {/* Content */}
+      <main className="w-full relative z-20 flex flex-col items-center gap-8 py-8 px-4 md:px-8">
+        <div className="text-center">
+          <h2 className="font-orbitron text-[32px] md:text-[48px] lg:text-[64px] font-[900] text-[#00F0FF] uppercase tracking-[-0.02em] mb-2">
+            Your Empire Stats
+          </h2>
+          <p className="font-orbitron text-[18px] md:text-[24px] text-[#F0F7F7] font-[700]">
+            Welcome back, <span className="text-[#00F0FF]">{username || "Tycoon"}</span>!
+          </p>
+        </div>
 
         {loading ? (
-          <div className="flex items-center justify-center">
-            <p className="font-orbitron text-cyan-300 text-lg animate-pulse">Loading stats...</p>
+          <div className="flex items-center justify-center py-20">
+            <p className="font-orbitron text-[#00F0FF] text-[18px]">
+              Loading empire data...
+            </p>
           </div>
-        ) : error ? (
-          <div className="text-red-400 text-center font-dmSans">{error}</div>
         ) : (
-          <div className="w-full flex flex-col gap-6">
-            {/* Player Stats Card */}
-            <div className="bg-[#0E1415]/80 rounded-xl border border-cyan-900/50 p-6 shadow-lg shadow-cyan-500/20 animate-pop-in">
-              <h2 className="font-orbitron text-2xl md:text-3xl text-cyan-300 font-bold mb-4">
-                Your Stats
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3">
-                  <Trophy className="w-6 h-6 text-cyan-300" />
-                  <p className="font-dmSans text-base text-gray-200">
-                    Wins: <span className="font-bold text-cyan-200">{playerStats.totalGamesWon}</span>
-                  </p>
+          <div className="w-full max-w-6xl flex flex-col gap-8">
+            {/* Player Stats Grid */}
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6 hover:border-[#00F0FF]/50 transition-all duration-300 group">
+                <div className="flex items-center justify-center w-12 h-12 bg-[#00F0FF]/10 rounded-full mb-4 group-hover:bg-[#00F0FF]/20 transition-colors">
+                  <BarChart2 className="w-6 h-6 text-[#00F0FF]" />
                 </div>
-                <div className="flex items-center gap-3">
-                  <BarChart2 className="w-6 h-6 text-cyan-300" />
-                  <p className="font-dmSans text-base text-gray-200">
-                    Total Games: <span className="font-bold text-cyan-200">{playerStats.totalGamesPlayed}</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Wallet className="w-6 h-6 text-cyan-300" />
-                  <p className="font-dmSans text-base text-gray-200">
-                    Balance: <span className="font-bold text-cyan-200">{playerStats.balance}</span>
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Trophy className="w-6 h-6 text-cyan-300" />
-                  <p className="font-dmSans text-base text-gray-200">
-                    Ranking: <span className="font-bold text-cyan-200">#{playerStats.ranking || 'Unranked'}</span>
-                  </p>
-                </div>
+                <h3 className="font-orbitron text-lg text-[#00F0FF] font-bold mb-2 text-center">Total Games</h3>
+                <p className="text-3xl font-bold text-[#F0F7F7] text-center">{playerStats.totalGames}</p>
               </div>
-            </div>
+              <div className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6 hover:border-[#00F0FF]/50 transition-all duration-300 group">
+                <div className="flex items-center justify-center w-12 h-12 bg-[#FFD700]/10 rounded-full mb-4 group-hover:bg-[#FFD700]/20 transition-colors">
+                  <Trophy className="w-6 h-6 text-[#FFD700]" />
+                </div>
+                <h3 className="font-orbitron text-lg text-[#FFD700] font-bold mb-2 text-center">Wins</h3>
+                <p className="text-3xl font-bold text-[#F0F7F7] text-center">{playerStats.wins}</p>
+                <p className="text-sm text-[#AFBAC0] text-center mt-1">{playerStats.winRate} Win Rate</p>
+              </div>
+              <div className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6 hover:border-[#00F0FF]/50 transition-all duration-300 group">
+                <div className="flex items-center justify-center w-12 h-12 bg-[#00F0FF]/10 rounded-full mb-4 group-hover:bg-[#00F0FF]/20 transition-colors">
+                  <Wallet className="w-6 h-6 text-[#00F0FF]" />
+                </div>
+                <h3 className="font-orbitron text-lg text-[#00F0FF] font-bold mb-2 text-center">BLOCK Tokens</h3>
+                <p className="text-3xl font-bold text-[#F0F7F7] text-center">{playerStats.tokensEarned.toLocaleString()}</p>
+              </div>
+              <div className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6 hover:border-[#00F0FF]/50 transition-all duration-300 group">
+                <div className="flex items-center justify-center w-12 h-12 bg-[#FFD700]/10 rounded-full mb-4 group-hover:bg-[#FFD700]/20 transition-colors">
+                  <Crown className="w-6 h-6 text-[#FFD700]" />
+                </div>
+                <h3 className="font-orbitron text-lg text-[#FFD700] font-bold mb-2 text-center">Tycoon Rank</h3>
+                <p className="text-3xl font-bold text-[#F0F7F7] text-center">#{playerStats.ranking}</p>
+              </div>
+            </section>
 
-            {/* Leaderboard */}
-            <div className="bg-[#0E1415]/80 rounded-xl border border-cyan-900/50 p-6 shadow-lg shadow-cyan-500/20 animate-pop-in">
-              <h2 className="font-orbitron text-2xl md:text-3xl text-cyan-300 font-bold mb-4">
-                Leaderboard
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-gray-200 font-dmSans text-sm">
-                  <thead>
-                    <tr className="border-b border-cyan-900/50">
-                      <th className="py-3 px-4 text-left text-cyan-300">Rank</th>
-                      <th className="py-3 px-4 text-left text-cyan-300">Player</th>
-                      <th className="py-3 px-4 text-left text-cyan-300">Total Games</th>
-                      <th className="py-3 px-4 text-left text-cyan-300">Wins</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.map((entry, index) => (
-                      <tr
-                        key={index}
-                        className={`border-b border-cyan-900/50 ${
-                          entry.address === String(address).toLowerCase() ? 'bg-cyan-500/10' : ''
-                        } hover:bg-cyan-500/20 transition-colors duration-200`}
-                      >
-                        <td className="py-3 px-4">#{entry.ranking}</td>
-                        <td className="py-3 px-4">{entry.username}</td>
-                        <td className="py-3 px-4">{entry.totalGamesPlayed}</td>
-                        <td className="py-3 px-4">{entry.totalGamesWon}</td>
-                      </tr>
-                    ))}
-                    {leaderboard.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="py-3 px-4 text-center text-gray-500">
-                          No leaderboard data available.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            {/* Leaderboard (real data from API) */}
+            <section className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6">
+              <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
+                <h3 className="font-orbitron text-2xl text-[#00F0FF] font-bold flex items-center gap-2">
+                  <Users className="w-6 h-6" />
+                  Global Leaderboard
+                </h3>
+                <Link
+                  href="/leaderboard"
+                  className="text-sm font-semibold text-[#00F0FF] hover:text-[#0FF0FC] border border-[#00F0FF]/50 hover:border-[#00F0FF] rounded-lg px-4 py-2 transition-colors"
+                >
+                  View full leaderboard →
+                </Link>
               </div>
-            </div>
+              {leaderboardLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12">
+                  <Loader2 className="w-6 h-6 text-[#00F0FF] animate-spin" />
+                  <span className="text-[#F0F7F7]/70">Loading leaderboard…</span>
+                </div>
+              ) : leaderboardError ? (
+                <div className="py-8 text-center">
+                  <p className="text-red-400/90 mb-3">{leaderboardError}</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchLeaderboard()}
+                    className="text-sm font-semibold text-[#00F0FF] hover:text-[#0FF0FC] border border-[#00F0FF]/50 hover:border-[#00F0FF] rounded-lg px-4 py-2 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[#F0F7F7] font-dmSans">
+                    <thead>
+                      <tr className="border-b border-[#003B3E]/50">
+                        <th className="py-4 px-4 text-left font-semibold">Rank</th>
+                        <th className="py-4 px-4 text-left font-semibold">Tycoon</th>
+                        <th className="py-4 px-4 text-left font-semibold hidden md:table-cell">Games</th>
+                        <th className="py-4 px-4 text-left font-semibold">Wins</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-[#F0F7F7]/60">
+                            No leaderboard data yet. Play games to climb the board!
+                          </td>
+                        </tr>
+                      ) : (
+                        leaderboard.map((entry, index) => (
+                          <tr
+                            key={`${entry.username}-${index}`}
+                            className={`border-b border-[#003B3E]/50 hover:bg-[#00F0FF]/5 transition-colors ${
+                              entry.username === (username || "You") ? "bg-[#00F0FF]/10" : ""
+                            }`}
+                          >
+                            <td className="py-4 px-4 font-bold text-[#FFD700]">{entry.ranking === 1 ? "🏆" : `#${entry.ranking}`}</td>
+                            <td className="py-4 px-4 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#00F0FF]/20 flex items-center justify-center text-[#00F0FF] font-bold text-sm shrink-0">
+                                {(entry.username || "?")[0].toUpperCase()}
+                              </div>
+                              <span className={entry.username === (username || "You") ? "text-[#00F0FF] font-bold" : ""}>
+                                {entry.username}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 hidden md:table-cell">{entry.totalGames}</td>
+                            <td className="py-4 px-4 font-bold">{entry.wins}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
 
             {/* Specific Game Stats Query */}
-            <div className="bg-[#0E1415]/80 rounded-xl border border-cyan-900/50 p-6 shadow-lg shadow-cyan-500/20 animate-pop-in">
-              <h2 className="font-orbitron text-2xl md:text-3xl text-cyan-300 font-bold mb-4">
-                Specific Game Stats
-              </h2>
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <section className="bg-[#0E1415]/80 backdrop-blur-sm rounded-[16px] border border-[#003B3E] p-6">
+              <h3 className="font-orbitron text-xl text-[#00F0FF] font-bold mb-4 flex items-center gap-2">
+                <BarChart2 className="w-5 h-5" />
+                Query specific game
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-4">
                 <input
                   type="text"
                   value={gameIdQuery}
                   onChange={(e) => setGameIdQuery(e.target.value)}
-                  placeholder="Enter Game ID"
-                  className="flex-1 h-10 bg-[#0E1415] rounded-lg border border-cyan-900/50 outline-none px-4 text-cyan-300 font-dmSans text-sm placeholder:text-gray-500"
-                  aria-label="Enter Game ID to query stats"
+                  onKeyDown={(e) => e.key === "Enter" && handleGameIdQuery()}
+                  placeholder="Enter 6-character game code (e.g. ABC123)"
+                  maxLength={7}
+                  className="flex-1 h-[48px] bg-[#0E1415]/50 rounded-[12px] border border-[#003B3E] outline-none px-4 text-[#17ffff] font-orbitron font-[400] text-[16px] placeholder:text-[#455A64] placeholder:font-dmSans focus:border-[#00F0FF] focus:ring-2 focus:ring-cyan-500/50 focus:ring-offset-2 focus:ring-offset-[#0E1415] transition-colors"
                 />
                 <button
+                  type="button"
                   onClick={handleGameIdQuery}
-                  className="relative group w-32 h-10 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg text-sm font-dmSans font-medium hover:from-cyan-600 hover:to-blue-600 transform hover:scale-105 transition-all duration-200"
-                  aria-label="Query game stats by ID"
+                  disabled={loading}
+                  className="relative group w-full sm:w-auto h-[48px] bg-transparent border-none p-0 overflow-hidden cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Query Game
+                  <svg
+                    width="140"
+                    height="48"
+                    viewBox="0 0 140 48"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="absolute top-0 left-0 w-full h-full"
+                  >
+                    <path
+                      d="M6 1H134C138.373 1 140.996 5.85486 138.601 9.5127L120.167 45.5127C119.151 47.0646 117.42 48 115.565 48H6C2.96244 48 0.5 45.5376 0.5 42.5V5.5C0.5 2.46243 2.96243 1 6 1Z"
+                      fill="#0E1415"
+                      stroke="#003B3E"
+                      strokeWidth={1}
+                      className="group-hover:stroke-[#00F0FF] transition-all duration-300 ease-in-out"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center gap-2 text-[#00F0FF] capitalize text-[14px] font-dmSans font-medium z-10">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {loading ? "Loading…" : "Look up"}
+                  </span>
                 </button>
               </div>
-              {gameDetails && (
-                <div className="bg-cyan-900/20 rounded-lg p-4">
-                  <h3 className="font-orbitron text-lg text-cyan-200 font-semibold mb-2">
-                    Game #{gameDetails.id}
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <p className="font-dmSans text-sm text-gray-200">
-                      Status: <span className="font-bold text-cyan-300">{gameDetails.status}</span>
-                    </p>
-                    <p className="font-dmSans text-sm text-gray-200">
-                      Winner: <span className="font-bold text-cyan-300">{gameDetails.winnerUsername}</span>
-                    </p>
-                    <p className="font-dmSans text-sm text-gray-200">
-                      Created By: <span className="font-bold text-cyan-300">{gameDetails.createdByUsername}</span>
-                    </p>
-                    <p className="font-dmSans text-sm text-gray-200">
-                      Duration: <span className="font-bold text-cyan-300">{Math.floor(gameDetails.duration / 60)} mins</span>
-                    </p>
+              {queryError && (
+                <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <p className="font-dmSans text-[14px] text-red-400 flex-1">{queryError}</p>
+                  <button
+                    type="button"
+                    onClick={() => fetchLeaderboard()}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-[#00F0FF] text-[#010F10] font-semibold text-sm font-orbitron hover:bg-[#00F0FF]/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00F0FF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0E1415]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+              {queriedGame && (
+                <div className="mt-4 p-4 rounded-xl bg-[#0a1214] border border-[#003B3E]">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span className="font-orbitron text-[#00F0FF] font-semibold">Code: {queriedGame.code}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      queriedGame.status === "RUNNING" ? "bg-amber-500/20 text-amber-400" :
+                      queriedGame.status === "FINISHED" ? "bg-emerald-500/20 text-emerald-400" :
+                      "bg-[#455A64]/30 text-[#AFBAC0]"
+                    }`}>
+                      {queriedGame.status}
+                    </span>
                   </div>
-                  <h4 className="font-orbitron text-base text-cyan-200 font-semibold mt-4 mb-2">Players</h4>
+                  <p className="font-dmSans text-[14px] text-[#AFBAC0] mb-2">Players</p>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-gray-200 font-dmSans text-sm">
+                    <table className="w-full text-left text-sm">
                       <thead>
-                        <tr className="border-b border-cyan-900/50">
-                          <th className="py-2 px-3 text-left text-cyan-300">Player</th>
-                          <th className="py-2 px-3 text-left text-cyan-300">Balance</th>
+                        <tr className="text-[#00F0FF]/80 border-b border-[#003B3E]">
+                          <th className="py-2 pr-4 font-orbitron">Player</th>
+                          <th className="py-2 pr-4 font-orbitron">Balance</th>
+                          <th className="py-2 font-orbitron">Position</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {gameDetails.players.map((player, index) => (
-                          <tr key={index} className="border-b border-cyan-900/50">
-                            <td className="py-2 px-3">{player.username}</td>
-                            <td className="py-2 px-3">{player.balance}</td>
+                        {queriedGame.players.map((p, i) => (
+                          <tr key={i} className="border-b border-[#003B3E]/50">
+                            <td className="py-2 pr-4 text-[#F0F7F7]">{p.username}</td>
+                            <td className="py-2 pr-4 text-[#AFBAC0]">${p.balance.toLocaleString()}</td>
+                            <td className="py-2 text-[#AFBAC0]">{p.position}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  {queriedGame.status === "FINISHED" && queriedGame.winner_id != null && (
+                    <p className="font-dmSans text-[14px] text-amber-400 mt-2">
+                      Winner: {queriedGame.players.find((p) => p.user_id === queriedGame.winner_id)?.username ?? "—"}
+                    </p>
+                  )}
                 </div>
               )}
-            </div>
+              {!queriedGame && !queryError && (
+                <p className="font-dmSans text-[14px] text-[#AFBAC0] mt-3">Enter a game code to see players, balances, and status.</p>
+              )}
+            </section>
           </div>
         )}
 
         {/* Back to Home Button */}
-        <button
-          onClick={() => router.push('/')}
-          className="relative group w-48 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-lg text-base font-dmSans font-semibold hover:from-yellow-600 hover:to-orange-600 transform hover:scale-110 transition-all duration-300 animate-pulse-slow"
-          aria-label="Return to home page"
+        <Link
+          href="/"
+          className="relative group w-[220px] h-[48px] bg-transparent border-none p-0 overflow-hidden cursor-pointer mb-8"
         >
-          Back to Home
-        </button>
+          <svg
+            width="220"
+            height="48"
+            viewBox="0 0 220 48"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="absolute top-0 left-0 w-full h-full"
+          >
+            <path
+              d="M10 1H210C214.373 1 216.996 5.85486 214.601 9.5127L196.167 45.5127C195.151 47.0646 193.42 48 191.565 48H10C6.96244 48 4.5 45.5376 4.5 42.5V5.5C4.5 2.46243 6.96243 1 10 1Z"
+              fill="#0E1415"
+              stroke="#003B3E"
+              strokeWidth={1}
+              className="group-hover:stroke-[#00F0FF] transition-all duration-300 ease-in-out"
+            />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-[#00F0FF] capitalize text-[14px] font-dmSans font-medium z-10">
+            Return to the Block
+          </span>
+        </Link>
       </main>
-
-      <style jsx>{`
-        @keyframes pop-in {
-          0% {
-            transform: scale(0.5);
-            opacity: 0;
-          }
-          80% {
-            transform: scale(1.1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        @keyframes pulse-slow {
-          0% {
-            transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.7);
-          }
-          70% {
-            transform: scale(1.05);
-            box-shadow: 0 0 10px 5px rgba(0, 240, 255, 0);
-          }
-          100% {
-            transform: scale(1);
-            box-shadow: 0 0 0 0 rgba(0, 240, 255, 0);
-          }
-        }
-        .animate-pop-in {
-          animation: pop-in 0.5s ease-out;
-        }
-        .animate-pulse-slow {
-          animation: pulse-slow 2s infinite;
-        }
-      `}</style>
     </section>
   );
 };
