@@ -128,7 +128,7 @@ const HeroSection: React.FC = () => {
     const fetchUser = async () => {
       try {
         const res = await apiClient.get<ApiResponse>(
-          `/users/by-address/${address}?chain=Celo`
+          `/users/by-address/${address}?chain=Starknet`
         );
 
         if (!isActive) return;
@@ -222,7 +222,7 @@ const HeroSection: React.FC = () => {
         const res = await apiClient.post<ApiResponse>("/users", {
           username: finalUsername,
           address,
-          chain: "Celo",
+          chain: "Starknet",
         });
 
         if (!res?.success) throw new Error("Failed to save user on backend");
@@ -264,7 +264,7 @@ const HeroSection: React.FC = () => {
 
       if (isAlreadyExists) {
         try {
-          const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Celo`);
+          const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Starknet`);
           if (res?.success && res?.data) {
             setUser(res.data as UserType);
             setLocalRegistered(true);
@@ -440,6 +440,9 @@ const handleContinuePrevious = () => {
             ownership, and fortune. Play solo against AI, compete in multiplayer
             rooms, collect tokens, complete quests, and become the ultimate
             blockchain tycoon.
+          </p>
+          <p className="font-orbitron text-[12px] md:text-[14px] text-[#00F0FF]/80 mt-3 tracking-wider">
+            Powered by Starknet
           </p>
         </div>
 

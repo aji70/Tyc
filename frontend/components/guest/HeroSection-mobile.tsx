@@ -120,7 +120,7 @@ const HeroSectionMobile: React.FC = () => {
 
     const fetchUser = async () => {
       try {
-        const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Celo`);
+        const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Starknet`);
 
         if (!isActive) return;
 
@@ -201,7 +201,7 @@ const HeroSectionMobile: React.FC = () => {
         const res = await apiClient.post<ApiResponse>("/users", {
           username: finalUsername,
           address,
-          chain: "Celo",
+          chain: "Starknet",
         });
 
         if (!res?.success) throw new Error("Failed to save user on backend");
@@ -238,7 +238,7 @@ const HeroSectionMobile: React.FC = () => {
 
       if (isAlreadyExists) {
         try {
-          const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Celo`);
+          const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Starknet`);
           if (res?.success && res?.data) {
             setUser(res.data as UserType);
             setLocalRegistered(true);
@@ -384,6 +384,9 @@ const handleContinuePrevious = () => {
         <p className="mt-5 sm:mt-6 text-center text-[#DDEEEE] text-[15px] sm:text-base leading-relaxed max-w-[340px] font-dmSans px-1">
           Roll the dice • Buy properties • Collect rent •
           Play against AI • Become the top tycoon
+        </p>
+        <p className="font-orbitron text-xs sm:text-sm text-[#00F0FF]/80 mt-2 tracking-wider">
+          Powered by Starknet
         </p>
 
         {/* Main action area */}

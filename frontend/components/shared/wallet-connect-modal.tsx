@@ -76,9 +76,12 @@ export default function WalletConnectModal({
             exit="exit"
           >
             <div className="w-full flex items-center justify-between relative mb-8">
-              <h2 className="w-full text-[24px] font-[600] text-[#F0F7F7] text-left font-orbitron">
-                Connect Wallet
-              </h2>
+              <div>
+                <h2 className="w-full text-[24px] font-[600] text-[#F0F7F7] text-left font-orbitron">
+                  Connect Wallet
+                </h2>
+                <p className="text-[#00F0FF]/80 text-sm font-dmSans mt-1">Starknet · via Cartridge</p>
+              </div>
               <button
                 type="button"
                 onClick={onClose}

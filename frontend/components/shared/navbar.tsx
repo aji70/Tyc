@@ -230,6 +230,13 @@ const NavBar = () => {
             )}
           </button>
 
+          {/* Chain badge: show Starknet when connected; optional when not (so users know the chain) */}
+          {!isConnected && (
+            <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] bg-[#003B3E]/60 border border-[#00F0FF]/20 text-[#00F0FF]/90 text-xs font-orbitron tracking-wide">
+              <Globe className="w-3.5 h-3.5" />
+              Starknet
+            </span>
+          )}
           {/* Wallet, guest, or Privy: wallet when connected; guest when signed in from hero; Privy sign in / signed in in nav */}
           {isConnected ? (
             <div className="flex items-center gap-3">
