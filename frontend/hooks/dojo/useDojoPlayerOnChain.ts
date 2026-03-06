@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { Contract, RpcProvider, shortString } from 'starknet';
-import { useDojoSDK } from '@dojoengine/sdk/react';
 import manifest from '@/lib/dojo/manifest_sepolia.json';
 import { dojoConfig } from '@/lib/dojo/dojoConfig';
 import { stringToFelt } from '@/utils/starknet';
@@ -11,57 +10,54 @@ const PLAYER_TAG = 'tycoon-player';
 const RPC_CALL_MS = 15_000;
 
 /**
- * Same reading path as the rest of the frontend:
- * - When Dojo SDK is available (Torii configured): use client.player.* from setupWorld(provider)
- *   → provider.call("tycoon", build_player_*_calldata(...)) in contracts.gen.ts
- * - When SDK is not available: raw RPC to the Player system contract from manifest (tycoon-player).
+ * Read player registration from the Dojo Player system as a normal Starknet contract.
+ * Each Dojo system is a deployed contract: we use its address from the manifest and
+ * call it via RpcProvider + Contract like any other Starknet contract (no Dojo client).
  */
 
-/** Fallback Starknet Sepolia RPCs when primary fails. */
 const SEPOLIA_RPC_FALLBACKS = [
   'https://starknet-sepolia.public.blastapi.io',
   'https://starknet-sepolia.drpc.org',
 ];
 
-/** Minimal ABI for player view calls so Contract compiles calldata correctly (ContractAddress encoding). */
+/** ABI for Player system view functions. Use simple types so starknet.js encodes calldata correctly. */
 const PLAYER_VIEW_ABI = [
   {
     type: 'function' as const,
     name: 'is_registered',
-    inputs: [{ name: 'address', type: 'core::starknet::contract_address::ContractAddress' }],
-    outputs: [{ type: 'core::bool' }],
+    inputs: [{ name: 'address', type: 'felt' }],
+    outputs: [{ type: 'bool' }],
     state_mutability: 'view' as const,
   },
   {
     type: 'function' as const,
     name: 'get_username',
-    inputs: [{ name: 'address', type: 'core::starknet::contract_address::ContractAddress' }],
-    outputs: [{ type: 'core::felt252' }],
+    inputs: [{ name: 'address', type: 'felt' }],
+    outputs: [{ type: 'felt' }],
     state_mutability: 'view' as const,
   },
   {
     type: 'function' as const,
     name: 'get_user',
-    inputs: [{ name: 'username', type: 'core::felt252' }],
+    inputs: [{ name: 'username', type: 'felt' }],
     outputs: [
-      { type: 'core::felt252' },
-      { type: 'core::integer::u256' },
-      { type: 'core::starknet::contract_address::ContractAddress' },
-      { type: 'core::integer::u64' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
-      { type: 'core::integer::u256' },
+      { type: 'felt' },
+      { type: 'u256' },
+      { type: 'felt' },
+      { type: 'u64' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
+      { type: 'u256' },
     ],
     state_mutability: 'view' as const,
   },
 ];
 
-/** Player system contract address — read from manifest (same system Starkscan shows for player entrypoints). */
 function getPlayerContractAddress(): string {
   const contracts = (manifest as { contracts?: { tag: string; address: string }[] }).contracts;
   const player = contracts?.find((c) => c.tag === PLAYER_TAG);
@@ -80,14 +76,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   ]);
 }
 
-/** Normalize address to hex (lowercase for consistency). */
-function normalizeAddress(addr: string): string {
+/** Address to single felt for calldata (ContractAddress = one felt in Cairo). */
+function addressToFelt(addr: string): bigint {
   const s = addr.trim().toLowerCase();
-  return s.startsWith('0x') ? s : `0x${s}`;
+  const hex = s.startsWith('0x') ? s : `0x${s}`;
+  return BigInt(hex);
 }
 
-/** Extract result array from Contract.call return (Result type or string[]). */
-function getResult(res: unknown): string[] {
+function getResult(res: unknown): unknown[] {
   if (Array.isArray(res)) return res;
   const r = res as { result?: unknown };
   const inner = r?.result;
@@ -99,7 +95,6 @@ function getResult(res: unknown): string[] {
   return [];
 }
 
-/** Turn a felt (string/bigint) into hex string for u256 or address. */
 function toHex(v: unknown): string {
   if (v == null) return '0';
   if (typeof v === 'string') return v.startsWith('0x') ? v : `0x${v}`;
@@ -107,7 +102,6 @@ function toHex(v: unknown): string {
   return '0x' + BigInt(Number(v)).toString(16);
 }
 
-/** Parse u256 from two felts (low, high) at indices i, i+1 in arr. */
 function u256FromFelts(arr: unknown[], i: number): string {
   const lo = arr[i];
   const hi = arr[i + 1];
@@ -120,16 +114,26 @@ function u256FromFelts(arr: unknown[], i: number): string {
   return (hiBig << BigInt(128)) + loBig + '';
 }
 
-/**
- * Parse get_user result into DojoUserOnChain.
- * - If RPC returns flattened felts: 21 elements (username, id_lo, id_hi, address, registered_at, 8× u256 as 2 felts each).
- * - If SDK returns decoded tuple: 12 elements (username, id, address, registered_at, 8× u256).
- * - If SDK returns object: { username, id, player_address, ... }.
- */
-function parseGetUserResult(
-  result: unknown[] | Record<string, unknown>,
-  usernameStr: string
-): DojoUserOnChain | null {
+function decodeUsername(result: unknown[]): string | null {
+  if (result.length === 0 || result[0] == null) return null;
+  try {
+    const felt = result[0];
+    const hex =
+      typeof felt === 'string'
+        ? felt.startsWith('0x')
+          ? felt
+          : `0x${felt}`
+        : typeof felt === 'bigint'
+          ? `0x${felt.toString(16)}`
+          : `0x${BigInt(Number(felt)).toString(16)}`;
+    if (BigInt(hex) === BigInt(0)) return null;
+    return shortString.decodeShortString(hex);
+  } catch {
+    return null;
+  }
+}
+
+function parseGetUserResult(result: unknown[] | Record<string, unknown>, usernameStr: string): DojoUserOnChain | null {
   try {
     const arr = Array.isArray(result) ? result : null;
     const obj = arr == null && result != null && typeof result === 'object' && !Array.isArray(result)
@@ -192,7 +196,6 @@ function parseGetUserResult(
   return null;
 }
 
-/** Full User from Dojo contract (get_user). */
 export interface DojoUserOnChain {
   username: string;
   id: string;
@@ -211,17 +214,13 @@ export interface DojoUserOnChain {
 export interface DojoPlayerOnChainResult {
   isRegisteredOnChain: boolean;
   usernameOnChain: string | null;
-  /** Full user from contract (id, player_address, etc.) when registered. */
   userOnChain: DojoUserOnChain | null;
   isLoading: boolean;
   error: Error | null;
 }
 
 /**
- * When a player lands, check if they are registered on the Dojo contract.
- * Uses the same reading path as the rest of the frontend (contracts.gen / useDojoPlayerActions):
- * - When Dojo SDK is available: client.player.getUsername, isRegistered, getUser (provider.call("tycoon", ...)).
- * - When SDK is not available: raw RPC to Player system contract from manifest (tycoon-player).
+ * Read player registration from the Player system contract (Starknet contract read, no Dojo client).
  */
 export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnChainResult {
   const [isRegisteredOnChain, setIsRegisteredOnChain] = useState(false);
@@ -229,8 +228,6 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
   const [userOnChain, setUserOnChain] = useState<DojoUserOnChain | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-
-  const dojoClient = useDojoSDK()?.client;
 
   useEffect(() => {
     if (!address?.trim()) {
@@ -242,119 +239,36 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
       return;
     }
 
-    const normalizedAddress = normalizeAddress(address);
-    let cancelled = false;
-    setError(null);
-    setIsLoading(true);
-
-    if (dojoClient?.player) {
-      (async () => {
-        try {
-          const [nameRes, isRegRes] = await Promise.all([
-            dojoClient.player.getUsername(normalizedAddress),
-            dojoClient.player.isRegistered(normalizedAddress),
-          ]);
-          if (cancelled) return;
-
-          const rawBool = Array.isArray(isRegRes) ? isRegRes[0] : isRegRes;
-          const isReg =
-            rawBool === true ||
-            rawBool === '0x1' ||
-            rawBool === '1' ||
-            (rawBool !== undefined && rawBool !== false && rawBool !== '0' && rawBool !== '0x0' && String(rawBool) !== '');
-
-          let name: string | null = null;
-          if (nameRes != null) {
-            if (typeof nameRes === 'string' && nameRes.trim()) name = nameRes.trim();
-            else if (Array.isArray(nameRes) && nameRes[0] != null) {
-              try {
-                const hex =
-                  typeof nameRes[0] === 'string'
-                    ? nameRes[0].startsWith('0x')
-                      ? nameRes[0]
-                      : `0x${nameRes[0]}`
-                    : `0x${BigInt(Number(nameRes[0])).toString(16)}`;
-                if (BigInt(hex) !== BigInt(0)) name = shortString.decodeShortString(hex);
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-
-          if (!cancelled) {
-            setIsRegisteredOnChain(!!isReg);
-            setUsernameOnChain(name);
-          }
-          if (!isReg || !name?.trim()) {
-            if (!cancelled) setUserOnChain(null);
-            return;
-          }
-          try {
-            const usernameFelt = stringToFelt(name.trim());
-            const felt = Array.isArray(usernameFelt) ? usernameFelt[0] : usernameFelt;
-            const userRes = await dojoClient.player.getUser(felt);
-            if (cancelled) return;
-            const raw = Array.isArray(userRes) ? userRes : (userRes as { result?: unknown })?.result;
-            const arr = Array.isArray(raw) ? raw : [];
-            const fullUser = parseGetUserResult(arr.length > 0 ? arr : (userRes as Record<string, unknown>), name);
-            if (!cancelled && fullUser) setUserOnChain(fullUser);
-          } catch {
-            /* ignore */
-          }
-        } catch (err) {
-          if (!cancelled) setError(err instanceof Error ? err : new Error(String(err)));
-        } finally {
-          if (!cancelled) setIsLoading(false);
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const playerContractAddress = getPlayerContractAddress();
-    if (!playerContractAddress) {
+    const playerAddress = getPlayerContractAddress();
+    if (!playerAddress) {
       setIsLoading(false);
       return;
     }
 
+    const addressFelt = addressToFelt(address);
     const primaryRpc =
       (dojoConfig as { rpcUrl?: string }).rpcUrl ??
       (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STARKNET_RPC_URL) ??
       'https://api.cartridge.gg/x/starknet/sepolia';
     const rpcUrls = [primaryRpc, ...SEPOLIA_RPC_FALLBACKS];
+    let cancelled = false;
 
     (async () => {
-      const decodeUsername = (result: unknown[]): string | null => {
-        if (result.length === 0 || result[0] == null) return null;
-        try {
-          const felt = result[0];
-          const hex =
-            typeof felt === 'string'
-              ? felt.startsWith('0x')
-                ? felt
-                : `0x${felt}`
-              : typeof felt === 'bigint'
-                ? `0x${felt.toString(16)}`
-                : `0x${BigInt(Number(felt)).toString(16)}`;
-          if (BigInt(hex) === BigInt(0)) return null;
-          return shortString.decodeShortString(hex);
-        } catch {
-          return null;
-        }
-      };
+      setError(null);
+      setIsLoading(true);
 
-      const fetchFullUser = async (
-        contract: Contract,
-        name: string
-      ): Promise<DojoUserOnChain | null> => {
+      const fetchFullUser = async (contract: Contract, name: string): Promise<DojoUserOnChain | null> => {
         try {
           const usernameFelt = stringToFelt(name.trim());
           const felt = Array.isArray(usernameFelt) ? usernameFelt[0] : usernameFelt;
-          const userRes = await contract.call('get_user', [felt.toString()]);
-          const raw = Array.isArray(userRes) ? userRes : getResult(userRes);
-          const payload = raw.length > 0 ? raw : (userRes as Record<string, unknown>);
-          return parseGetUserResult(payload as unknown[] | Record<string, unknown>, name);
+          const userRes = await withTimeout(
+            contract.call('get_user', [felt]),
+            RPC_CALL_MS,
+            'get_user'
+          );
+          const raw = getResult(userRes);
+          const arr = Array.isArray(raw) ? raw : [];
+          return parseGetUserResult(arr.length > 0 ? arr : (userRes as Record<string, unknown>), name);
         } catch {
           return null;
         }
@@ -366,54 +280,50 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
           if (cancelled) break;
           try {
             const provider = new RpcProvider({ nodeUrl: rpcUrl });
-            const contract = new Contract(PLAYER_VIEW_ABI, playerContractAddress, provider);
+            const contract = new Contract(PLAYER_VIEW_ABI, playerAddress, provider);
 
-            // 1) Try get_username first (same contract as Starkscan "Read")
+            // Pass address as bigint so starknet.js encodes one felt (ContractAddress)
+            const callAddress = addressFelt;
+
             let name: string | null = null;
             try {
               const usernameRes = await withTimeout(
-                contract.call('get_username', [normalizedAddress]),
+                contract.call('get_username', [callAddress]),
                 RPC_CALL_MS,
                 'get_username'
               );
               if (cancelled) break;
-              const arr = Array.isArray(usernameRes) ? usernameRes : getResult(usernameRes);
-              name = decodeUsername(arr);
+              const arr = getResult(usernameRes);
+              name = decodeUsername(Array.isArray(arr) ? arr : []);
             } catch (_) {}
 
             if (name?.trim()) {
               if (!cancelled) {
                 setIsRegisteredOnChain(true);
-                const trimmed = name.trim();
-                setUsernameOnChain(trimmed);
-                try {
-                  const fullUser = await withTimeout(
-                    fetchFullUser(contract, trimmed),
-                    RPC_CALL_MS,
-                    'get_user'
-                  );
-                  if (!cancelled && fullUser) setUserOnChain(fullUser);
-                } catch (_) {}
+                setUsernameOnChain(name.trim());
+                const fullUser = await fetchFullUser(contract, name.trim());
+                if (!cancelled && fullUser) setUserOnChain(fullUser);
               }
               return;
             }
 
-            // 2) Call is_registered (same as Starkscan)
             const res = await withTimeout(
-              contract.call('is_registered', [normalizedAddress]),
+              contract.call('is_registered', [callAddress]),
               RPC_CALL_MS,
               'is_registered'
             );
             if (cancelled) break;
 
-            const result = Array.isArray(res) ? res : getResult(res);
-            const raw = result[0];
+            const result = getResult(res);
+            const arr = Array.isArray(result) ? result : [];
+            const raw = arr[0];
             const isReg =
-              result.length > 0 &&
+              arr.length > 0 &&
               (raw === true ||
                 raw === '0x1' ||
                 raw === '1' ||
-                (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(raw !== '' ? String(raw) : '0') !== BigInt(0)));
+                (raw !== undefined && raw !== false && raw !== '0' && raw !== '0x0' && BigInt(String(raw !== '' ? raw : '0')) !== BigInt(0)));
+
             if (!cancelled) setIsRegisteredOnChain(!!isReg);
 
             if (!isReg) {
@@ -427,26 +337,20 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
             if (!name) {
               try {
                 const usernameRes2 = await withTimeout(
-                  contract.call('get_username', [normalizedAddress]),
+                  contract.call('get_username', [callAddress]),
                   RPC_CALL_MS,
                   'get_username'
                 );
                 if (!cancelled) {
-                  const arr2 = Array.isArray(usernameRes2) ? usernameRes2 : getResult(usernameRes2);
-                  name = decodeUsername(arr2);
+                  const arr2 = getResult(usernameRes2);
+                  name = decodeUsername(Array.isArray(arr2) ? arr2 : []);
                 }
               } catch (_) {}
             }
             if (!cancelled) setUsernameOnChain(name);
             if (name?.trim() && !cancelled) {
-              try {
-                const fullUser = await withTimeout(
-                  fetchFullUser(contract, name.trim()),
-                  RPC_CALL_MS,
-                  'get_user'
-                );
-                if (!cancelled && fullUser) setUserOnChain(fullUser);
-              } catch (_) {}
+              const fullUser = await fetchFullUser(contract, name.trim());
+              if (!cancelled && fullUser) setUserOnChain(fullUser);
             }
             return;
           } catch (err) {
@@ -471,7 +375,7 @@ export function useDojoPlayerOnChain(address: string | undefined): DojoPlayerOnC
     return () => {
       cancelled = true;
     };
-  }, [address, dojoClient]);
+  }, [address]);
 
   return { isRegisteredOnChain, usernameOnChain, userOnChain, isLoading, error };
 }
