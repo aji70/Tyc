@@ -50,7 +50,7 @@ export function StarknetProvider({ children }: { children: React.ReactNode }) {
       provider={provider}
       connectors={connectors}
       explorer={cartridge}
-      autoConnect
+      autoConnect={false}
       defaultChainId={sepolia.id}
     >
       {children}
