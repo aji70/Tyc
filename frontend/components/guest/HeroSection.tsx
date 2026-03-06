@@ -12,6 +12,7 @@ import {
   useGetGameByCode,
 } from "@/context/ContractProvider";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
+import { useDojoPlayerOnChain } from "@/hooks/dojo/useDojoPlayerOnChain";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
@@ -36,10 +37,18 @@ const HeroSection: React.FC = () => {
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
+  const { isRegisteredOnChain, usernameOnChain, isLoading: isOnChainLoading } = useDojoPlayerOnChain(address ?? undefined);
 
-  // Starknet/Dojo: no backend; registration status from on-chain (local after successful register)
-  const isRegisteredLoading = false;
-  const fetchedUsername = undefined;
+  // When player lands: if registered on chain, sync local state so we show "Welcome [player]..."
+  useEffect(() => {
+    if (address && isRegisteredOnChain) {
+      setLocalRegistered(true);
+      if (usernameOnChain?.trim()) setLocalUsername((prev) => prev || usernameOnChain.trim());
+    }
+  }, [address, isRegisteredOnChain, usernameOnChain]);
+
+  const isRegisteredLoading = isOnChainLoading;
+  const fetchedUsername = usernameOnChain ?? undefined;
 
   const { data: gameCode } = usePreviousGameCode(address);
 
@@ -145,17 +154,17 @@ const HeroSection: React.FC = () => {
 
   const registrationStatus = useMemo(() => {
     if (address) {
-      if (localRegistered) return "fully-registered";
+      if (localRegistered || isRegisteredOnChain) return "fully-registered";
       return "none";
     }
     if (guestUser) return "guest";
     return "disconnected";
-  }, [address, localRegistered, guestUser]);
+  }, [address, localRegistered, isRegisteredOnChain, guestUser]);
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
-    return user?.username || localUsername || fetchedUsername || inputUsername || "Player";
-  }, [guestUser, user, localUsername, fetchedUsername, inputUsername]);
+    return user?.username || localUsername || usernameOnChain || fetchedUsername || inputUsername || "Player";
+  }, [guestUser, user, localUsername, usernameOnChain, fetchedUsername, inputUsername]);
 
   // Not on contract: if backend has user, prefill username once
   useEffect(() => {
