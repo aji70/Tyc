@@ -18,10 +18,9 @@ const RPC_CALL_MS = 15_000;
  * set NEXT_PUBLIC_STARKNET_READ_RPC_URL to a full RPC (e.g. https://starknet-sepolia.public.blastapi.io).
  */
 
-/** Fallback RPCs for starknet_call. Note: from browser (e.g. Vercel) many public RPCs block CORS; app RPC is tried first. */
+/** Fallback RPCs for starknet_call. Cartridge is tried first; from browser you must whitelist your domain in Cartridge Slot (see docs). drpc often returns 400 for our payload so excluded. */
 const SEPOLIA_READ_RPC_FALLBACKS = [
   'https://starknet-sepolia.public.blastapi.io',
-  'https://starknet-sepolia.drpc.org',
   'https://starknet-sepolia-rpc.publicnode.com',
 ];
 
