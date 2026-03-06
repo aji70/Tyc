@@ -7,12 +7,10 @@ import { TypeAnimation } from "react-type-animation";
 import { useRouter } from "next/navigation";
 import { useAccount } from "@starknet-react/core";
 import {
-  useIsRegistered,
-  useGetUsername,
-  useRegisterPlayer,
   usePreviousGameCode,
   useGetGameByCode,
 } from "@/context/ContractProvider";
+import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
@@ -37,14 +35,10 @@ const HeroSectionMobile: React.FC = () => {
   const [guestPassword, setGuestPassword] = useState("");
   const [guestLoading, setGuestLoading] = useState(false);
 
-  const { write: registerPlayer, isPending: registerPending } = useRegisterPlayer();
+  const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
 
-  const {
-    data: isUserRegistered,
-    isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
-
-  const { data: fetchedUsername } = useGetUsername(address);
+  const isRegisteredLoading = false;
+  const fetchedUsername = undefined;
 
   const { data: gameCode } = usePreviousGameCode(address);
 
@@ -146,16 +140,13 @@ const HeroSectionMobile: React.FC = () => {
 
   const registrationStatus = useMemo(() => {
     if (address) {
-      const hasBackend = !!user;
-      const hasOnChain = !!isUserRegistered || localRegistered;
-      if (hasBackend && hasOnChain) return "fully-registered";
-      if (hasBackend && !hasOnChain) return "backend-only";
+      if (localRegistered) return "fully-registered";
       return "none";
     }
     if (guestUser) return "guest";
     if (isPrivyAuthed) return "privy";
     return "disconnected";
-  }, [address, user, isUserRegistered, localRegistered, guestUser, isPrivyAuthed]);
+  }, [address, localRegistered, guestUser, isPrivyAuthed]);
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
@@ -178,11 +169,7 @@ const HeroSectionMobile: React.FC = () => {
       return;
     }
 
-    let finalUsername = inputUsername.trim();
-
-    if (registrationStatus === "backend-only" && user?.username) {
-      finalUsername = user.username.trim();
-    }
+    const finalUsername = inputUsername.trim();
 
     if (!finalUsername) {
       toast.warn("Please enter a username");
@@ -193,29 +180,16 @@ const HeroSectionMobile: React.FC = () => {
     const toastId = toast.loading("Processing registration...");
 
     try {
-      if (!isUserRegistered && !localRegistered) {
-        try {
-          await registerPlayer(finalUsername);
-        } catch (onChainErr: any) {
-          const msg = onChainErr?.message ?? "";
-          if (/wallet|contract not available|not available/i.test(msg)) {
-            // Starknet-only: skip on-chain, proceed to backend-only
-          } else {
-            throw onChainErr;
-          }
-        }
+      if (!localRegistered) {
+        await registerPlayer(finalUsername);
       }
 
-      if (!user) {
-        const res = await apiClient.post<ApiResponse>("/users", {
-          username: finalUsername,
-          address,
-          chain: "Starknet",
-        });
-
-        if (!res?.success) throw new Error("Failed to save user on backend");
-        setUser({ username: finalUsername } as UserType);
-      }
+      // Backend registration commented out — Starknet/Dojo: users register on-chain only (Cartridge)
+      // if (!user) {
+      //   const res = await apiClient.post<ApiResponse>("/users", { username: finalUsername, address, chain: "Starknet" });
+      //   if (!res?.success) throw new Error("Failed to save user on backend");
+      //   setUser({ username: finalUsername } as UserType);
+      // }
 
       setLocalRegistered(true);
       setLocalUsername(finalUsername);
@@ -341,7 +315,7 @@ const handleContinuePrevious = () => {
 
         {/* Welcome / Loading message + Level */}
         <div className="mt-5 sm:mt-6 text-center px-2 flex flex-col items-center gap-2">
-          {(registrationStatus === "fully-registered" || registrationStatus === "backend-only" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
+          {(registrationStatus === "fully-registered" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
             <>
               <p className="font-orbitron text-lg sm:text-xl font-bold text-[#00F0FF]">
                 Welcome back, {displayUsername}!

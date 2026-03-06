@@ -8,12 +8,10 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "@starknet-react/core";
 import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import {
-  useIsRegistered,
-  useGetUsername,
-  useRegisterPlayer,
   usePreviousGameCode,
   useGetGameByCode,
 } from "@/context/ContractProvider";
+import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { toast } from "react-toastify";
@@ -40,18 +38,11 @@ const HeroSection: React.FC = () => {
   const [guestPassword, setGuestPassword] = useState("");
   const [guestLoading, setGuestLoading] = useState(false);
 
-  const {
-    write: registerPlayer,
-    isPending: registerPending,
-  } = useRegisterPlayer();
+  const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
 
-  const {
-    data: isUserRegistered,
-    isLoading: isRegisteredLoading,
-    error: registeredError,
-  } = useIsRegistered(address);
-
-  const { data: fetchedUsername } = useGetUsername(address);
+  // Starknet/Dojo: no backend; registration status from on-chain (local after successful register)
+  const isRegisteredLoading = false;
+  const fetchedUsername = undefined;
 
   const { data: gameCode } = usePreviousGameCode(address);
 
@@ -157,16 +148,14 @@ const HeroSection: React.FC = () => {
 
   const registrationStatus = useMemo(() => {
     if (address) {
-      const hasBackend = !!user;
-      const hasOnChain = !!isUserRegistered || localRegistered;
-      if (hasBackend && hasOnChain) return "fully-registered";
-      if (hasBackend && !hasOnChain) return "backend-only";
+      // Starknet/Dojo: on-chain only; no backend registration
+      if (localRegistered) return "fully-registered";
       return "none";
     }
     if (guestUser) return "guest";
     if (isPrivyAuthed) return "privy";
     return "disconnected";
-  }, [address, user, isUserRegistered, localRegistered, guestUser, isPrivyAuthed]);
+  }, [address, localRegistered, guestUser, isPrivyAuthed]);
 
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
@@ -196,12 +185,7 @@ const HeroSection: React.FC = () => {
       return;
     }
 
-    let finalUsername = inputUsername.trim();
-
-    // If backend user exists but not on-chain → use backend username
-    if (registrationStatus === "backend-only" && user?.username) {
-      finalUsername = user.username.trim();
-    }
+    const finalUsername = inputUsername.trim();
 
     if (!finalUsername) {
       toast.warn("Please enter a username");
@@ -212,31 +196,21 @@ const HeroSection: React.FC = () => {
     const toastId = toast.loading("Processing registration...");
 
     try {
-      // Register on-chain if not already (EVM/ContractProvider). Skip when Starknet-only (no EVM wallet).
-      if (!isUserRegistered && !localRegistered) {
-        try {
-          await registerPlayer(finalUsername);
-        } catch (onChainErr: any) {
-          const msg = onChainErr?.message ?? "";
-          if (/wallet|contract not available|not available/i.test(msg)) {
-            // Starknet-only: no EVM wallet; skip on-chain, proceed to backend-only registration
-          } else {
-            throw onChainErr;
-          }
-        }
+      // Starknet/Dojo: register on-chain only (Cartridge wallet → Dojo player system)
+      if (!localRegistered) {
+        await registerPlayer(finalUsername);
       }
 
-      // Create backend user if doesn't exist
-      if (!user) {
-        const res = await apiClient.post<ApiResponse>("/users", {
-          username: finalUsername,
-          address,
-          chain: "Starknet",
-        });
-
-        if (!res?.success) throw new Error("Failed to save user on backend");
-        setUser({ username: finalUsername } as UserType); // optimistic
-      }
+      // Backend registration commented out — Starknet/Dojo project: users register on-chain only
+      // if (!user) {
+      //   const res = await apiClient.post<ApiResponse>("/users", {
+      //     username: finalUsername,
+      //     address,
+      //     chain: "Starknet",
+      //   });
+      //   if (!res?.success) throw new Error("Failed to save user on backend");
+      //   setUser({ username: finalUsername } as UserType);
+      // }
 
       // Optimistic updates
       setLocalRegistered(true);
@@ -363,7 +337,7 @@ const handleContinuePrevious = () => {
 
       <main className="w-full h-full absolute top-0 left-0 z-2 bg-transparent flex flex-col lg:justify-center items-center gap-1">
         {/* Welcome Message + Level */}
-        {(registrationStatus === "fully-registered" || registrationStatus === "backend-only" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
+        {(registrationStatus === "fully-registered" || registrationStatus === "guest" || registrationStatus === "privy") && !loading && (
           <div className="mt-20 md:mt-28 lg:mt-0 flex flex-col items-center gap-2">
             <p className="font-orbitron lg:text-[24px] md:text-[20px] text-[16px] font-[700] text-[#00F0FF] text-center">
               Welcome back, {displayUsername}!
