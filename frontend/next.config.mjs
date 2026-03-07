@@ -19,21 +19,6 @@ const nextConfig = {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.output.webassemblyModuleFilename =
       isServer && !dev ? '../static/wasm/[modulehash].wasm' : 'static/wasm/[modulehash].wasm';
-
-    // Force a single React instance in the client bundle to fix "ReactCurrentBatchConfig" (R3F/Cartridge/Dojo).
-    if (!isServer) {
-      const reactDir = path.resolve(__dirname, 'node_modules/react');
-      const reactDomDir = path.resolve(__dirname, 'node_modules/react-dom');
-      config.resolve = config.resolve ?? {};
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        react: reactDir,
-        'react-dom': reactDomDir,
-        'react/jsx-runtime': path.join(reactDir, 'jsx-runtime.js'),
-        'react/jsx-dev-runtime': path.join(reactDir, 'jsx-dev-runtime.js'),
-      };
-    }
-
     return config;
   },
   async redirects() {
