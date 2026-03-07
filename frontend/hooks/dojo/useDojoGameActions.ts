@@ -8,9 +8,13 @@ import { useDojoSDK } from '@dojoengine/sdk/react';
 /**
  * Dojo world game actions (Tycoon on Starknet).
  * Use with DojoProvider + StarknetProvider; account from useAccount() from @starknet-react/core.
+ * When Dojo SDK is not initialized (e.g. no Torii URL), returns callbacks that reject.
  */
 export function useDojoGameActions() {
-  const { client } = useDojoSDK();
+  const sdk = useDojoSDK();
+  const client = sdk?.client;
+
+  const noClient = () => Promise.reject(new Error('Dojo SDK not initialized'));
 
   const createGame = useCallback(
     (
@@ -23,16 +27,18 @@ export function useDojoGameActions() {
       startingBalance: BigNumberish,
       stakeAmount: BigNumberish
     ) =>
-      client.game.createGame(
-        account,
-        creatorUsername,
-        gameType,
-        playerSymbol,
-        numberOfPlayers,
-        code,
-        startingBalance,
-        stakeAmount
-      ),
+      client
+        ? client.game.createGame(
+            account,
+            creatorUsername,
+            gameType,
+            playerSymbol,
+            numberOfPlayers,
+            code,
+            startingBalance,
+            stakeAmount
+          )
+        : noClient(),
     [client]
   );
 
@@ -46,15 +52,17 @@ export function useDojoGameActions() {
       code: BigNumberish,
       startingBalance: BigNumberish
     ) =>
-      client.game.createAiGame(
-        account,
-        creatorUsername,
-        gameType,
-        playerSymbol,
-        numberOfAi,
-        code,
-        startingBalance
-      ),
+      client
+        ? client.game.createAiGame(
+            account,
+            creatorUsername,
+            gameType,
+            playerSymbol,
+            numberOfAi,
+            code,
+            startingBalance
+          )
+        : noClient(),
     [client]
   );
 
@@ -66,46 +74,51 @@ export function useDojoGameActions() {
       playerSymbol: BigNumberish,
       joinCode: BigNumberish
     ) =>
-      client.game.joinGame(
-        account,
-        gameId,
-        playerUsername,
-        playerSymbol,
-        joinCode
-      ),
+      client
+        ? client.game.joinGame(
+            account,
+            gameId,
+            playerUsername,
+            playerSymbol,
+            joinCode
+          )
+        : noClient(),
     [client]
   );
 
   const getGame = useCallback(
-    (gameId: BigNumberish) => client.game.getGame(gameId),
+    (gameId: BigNumberish) =>
+      client ? client.game.getGame(gameId) : noClient(),
     [client]
   );
 
   const getGameByCode = useCallback(
-    (code: BigNumberish) => client.game.getGameByCode(code),
+    (code: BigNumberish) =>
+      client ? client.game.getGameByCode(code) : noClient(),
     [client]
   );
 
   const getGamePlayer = useCallback(
     (gameId: BigNumberish, player: string) =>
-      client.game.getGamePlayer(gameId, player),
+      client ? client.game.getGamePlayer(gameId, player) : noClient(),
     [client]
   );
 
   const getGameSettings = useCallback(
-    (gameId: BigNumberish) => client.game.getGameSettings(gameId),
+    (gameId: BigNumberish) =>
+      client ? client.game.getGameSettings(gameId) : noClient(),
     [client]
   );
 
   const exitGame = useCallback(
     (account: Account | AccountInterface, gameId: BigNumberish) =>
-      client.game.exitGame(account, gameId),
+      client ? client.game.exitGame(account, gameId) : noClient(),
     [client]
   );
 
   const leavePendingGame = useCallback(
     (account: Account | AccountInterface, gameId: BigNumberish) =>
-      client.game.leavePendingGame(account, gameId),
+      client ? client.game.leavePendingGame(account, gameId) : noClient(),
     [client]
   );
 
@@ -117,23 +130,27 @@ export function useDojoGameActions() {
       finalBalance: BigNumberish,
       isWin: boolean
     ) =>
-      client.game.endAiGame(
-        account,
-        gameId,
-        finalPosition,
-        finalBalance,
-        isWin
-      ),
+      client
+        ? client.game.endAiGame(
+            account,
+            gameId,
+            finalPosition,
+            finalBalance,
+            isWin
+          )
+        : noClient(),
     [client]
   );
 
   const getLastGameCode = useCallback(
-    (account: Account | AccountInterface) => client.game.getLastGameCode(account),
+    (account: Account | AccountInterface) =>
+      client ? client.game.getLastGameCode(account) : noClient(),
     [client]
   );
 
   const getPlayersInGame = useCallback(
-    (gameId: BigNumberish) => client.game.getPlayersInGame(gameId),
+    (gameId: BigNumberish) =>
+      client ? client.game.getPlayersInGame(gameId) : noClient(),
     [client]
   );
 
@@ -145,13 +162,15 @@ export function useDojoGameActions() {
       fromPlayer: string,
       toPlayer: string
     ) =>
-      client.game.transferPropertyOwnership(
-        account,
-        gameId,
-        propertyId,
-        fromPlayer,
-        toPlayer
-      ),
+      client
+        ? client.game.transferPropertyOwnership(
+            account,
+            gameId,
+            propertyId,
+            fromPlayer,
+            toPlayer
+          )
+        : noClient(),
     [client]
   );
 

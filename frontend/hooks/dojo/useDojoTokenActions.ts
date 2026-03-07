@@ -5,20 +5,24 @@ import type { Account, AccountInterface } from 'starknet';
 import type { BigNumberish } from 'starknet';
 import { useDojoSDK } from '@dojoengine/sdk/react';
 
+const noClient = () => Promise.reject(new Error('Dojo SDK not initialized'));
+
 /**
  * Dojo world TYC token actions (Tycoon on Starknet).
  */
 export function useDojoTokenActions() {
-  const { client } = useDojoSDK();
+  const sdk = useDojoSDK();
+  const client = sdk?.client;
 
   const balanceOf = useCallback(
-    (address: string) => client.token.balanceOf(address),
+    (address: string) =>
+      client ? client.token.balanceOf(address) : noClient(),
     [client]
   );
 
   const transfer = useCallback(
     (account: Account | AccountInterface, to: string, amount: BigNumberish) =>
-      client.token.transfer(account, to, amount),
+      client ? client.token.transfer(account, to, amount) : noClient(),
     [client]
   );
 
@@ -27,18 +31,19 @@ export function useDojoTokenActions() {
       account: Account | AccountInterface,
       spender: string,
       amount: BigNumberish
-    ) => client.token.approve(account, spender, amount),
+    ) =>
+      client ? client.token.approve(account, spender, amount) : noClient(),
     [client]
   );
 
   const allowance = useCallback(
     (owner: string, spender: string) =>
-      client.token.allowance(owner, spender),
+      client ? client.token.allowance(owner, spender) : noClient(),
     [client]
   );
 
   const totalSupply = useCallback(
-    () => client.token.totalSupply(),
+    () => (client ? client.token.totalSupply() : noClient()),
     [client]
   );
 
