@@ -41,6 +41,7 @@ export default function GameWaiting3DLobby(): React.ReactElement {
     isJoining,
     joinError,
     contractGameError,
+    isContractGameOpen,
   } = useWaitingRoom({ redirectToBoard: REDIRECT_TO_BOARD, redirectToBoardMobile: REDIRECT_TO_BOARD_MOBILE });
 
   const gameUrl3d = useMemo(() => {
@@ -212,6 +213,11 @@ export default function GameWaiting3DLobby(): React.ReactElement {
                 Connect a wallet to join this staked game.
               </p>
             )}
+            {isContractGameOpen === false && (
+              <p className="text-amber-400 text-sm mb-2">
+                This game has already started on-chain. You can&apos;t join it.
+              </p>
+            )}
             <button
               type="button"
               onClick={handleJoinGame}
@@ -221,7 +227,8 @@ export default function GameWaiting3DLobby(): React.ReactElement {
                 isJoining ||
                 approvePending ||
                 approveConfirming ||
-                guestCannotJoinStaked
+                guestCannotJoinStaked ||
+                isContractGameOpen === false
               }
               className="w-full py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold transition"
             >

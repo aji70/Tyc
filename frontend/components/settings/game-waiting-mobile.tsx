@@ -52,6 +52,7 @@ export default function GameWaitingMobile({ redirectToBoard }: GameWaitingMobile
     handleGoHome,
     isCreator,
     guestCannotJoinStaked,
+    isContractGameOpen,
   } = useWaitingRoom({ redirectToBoard });
 
   // Loading / Error guards
@@ -196,6 +197,9 @@ export default function GameWaitingMobile({ redirectToBoard }: GameWaitingMobile
                     )}
                   </select>
                 </div>
+                {isContractGameOpen === false && (
+                  <p className="text-amber-400 text-sm">This game has already started on-chain. You can&apos;t join it.</p>
+                )}
                 {guestCannotJoinStaked && (
                   <p className="text-amber-400 text-sm text-center bg-amber-900/30 p-3 rounded-xl border border-amber-500/40">
                     Guests cannot join staked games. Connect a wallet to join this game.
@@ -205,7 +209,7 @@ export default function GameWaitingMobile({ redirectToBoard }: GameWaitingMobile
                   type="button"
                   onClick={handleJoinGame}
                   className="w-full bg-gradient-to-r from-[#00F0FF] to-[#FF00FF] text-black text-sm font-orbitron font-extrabold py-3 rounded-xl hover:opacity-90 transition-all duration-300 shadow-lg hover:shadow-[#00F0FF]/50 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!playerSymbol || actionLoading || isJoining || approvePending || approveConfirming || guestCannotJoinStaked}
+                  disabled={!playerSymbol || actionLoading || isJoining || approvePending || approveConfirming || guestCannotJoinStaked || isContractGameOpen === false}
                 >
                   {actionLoading || isJoining || approvePending || approveConfirming ? "Entering..." : "Join the Battle"}
                 </button>
@@ -412,7 +416,7 @@ export default function GameWaitingMobile({ redirectToBoard }: GameWaitingMobile
                   type="button"
                   onClick={handleJoinGame}
                   className="w-full bg-gradient-to-r from-[#00F0FF] to-[#FF00FF] text-black text-sm font-orbitron font-extrabold py-3 rounded-xl hover:opacity-90 transition-all duration-300 shadow-lg hover:shadow-[#00F0FF]/50 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!playerSymbol || actionLoading || isJoining || approvePending || approveConfirming || guestCannotJoinStaked}
+                  disabled={!playerSymbol || actionLoading || isJoining || approvePending || approveConfirming || guestCannotJoinStaked || isContractGameOpen === false}
                 >
                   {actionLoading || isJoining || approvePending || approveConfirming ? "Entering..." : "Join the Battle"}
                 </button>

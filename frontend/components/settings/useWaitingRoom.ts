@@ -6,6 +6,7 @@ import { useAccount } from "@starknet-react/core";
 import { Address } from "viem";
 import { useAllDojoReads, useDojoUsername } from "@/hooks/useAllDojoReads";
 import { useDojoGameActions } from "@/hooks/dojo/useDojoGameActions";
+import { shortString } from "starknet";
 import { usernameToFelt, codeToFelt, symbolToDojo } from "@/lib/dojo/calldata";
 import { apiClient } from "@/lib/api";
 import { Game } from "@/lib/types/games";
@@ -78,6 +79,7 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
   const [dojoGame, setDojoGame] = useState<{
     id: bigint;
     creator?: string;
+    status?: string;
     joinedPlayers?: number;
     numberOfPlayers?: number;
     stakePerPlayer?: bigint;
@@ -102,12 +104,14 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
           setDojoGame(null);
           return;
         }
+        // Game struct: id, code, creator, status, winner, number_of_players, joined_players, mode, ai, stake_per_player, ...
         setDojoGame({
           id: gameId,
-          joinedPlayers: arr[3] != null ? Number(arr[3]) : undefined,
-          numberOfPlayers: arr[2] != null ? Number(arr[2]) : undefined,
-          stakePerPlayer: arr[8] != null ? BigInt(String(arr[8])) : undefined,
-          creator: arr[1] != null ? String(arr[1]) : undefined,
+          creator: arr[2] != null ? String(arr[2]) : undefined,
+          status: arr[3] != null ? String(arr[3]) : undefined,
+          numberOfPlayers: arr[5] != null ? Number(arr[5]) : undefined,
+          joinedPlayers: arr[6] != null ? Number(arr[6]) : undefined,
+          stakePerPlayer: arr[9] != null ? BigInt(String(arr[9])) : undefined,
         });
       })
       .catch((err) => {
@@ -121,15 +125,30 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
     };
   }, [gameCode, enableContractRead, getGameByCode]);
 
+  const PENDING_STATUS_FELT = useMemo(
+    () => BigInt(shortString.encodeShortString("PENDING")),
+    []
+  );
+
   const contractGame = dojoGame
     ? {
         id: dojoGame.id,
         creator: dojoGame.creator,
+        status: dojoGame.status,
         joinedPlayers: dojoGame.joinedPlayers,
         numberOfPlayers: dojoGame.numberOfPlayers,
         stakePerPlayer: dojoGame.stakePerPlayer,
       }
     : undefined;
+
+  const isContractGameOpen = useMemo(() => {
+    if (!contractGame?.status) return true;
+    try {
+      return BigInt(contractGame.status) === PENDING_STATUS_FELT;
+    } catch {
+      return true;
+    }
+  }, [contractGame?.status, PENDING_STATUS_FELT]);
 
   const contractGameError = useMemo(() => {
     if (!contractGameErrorRaw) return null;
@@ -509,6 +528,22 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
       return;
     }
 
+    if (!isContractGameOpen) {
+      setError(
+        "This game has already started on-chain. The backend may still show PENDING until it syncs. You can't join this game."
+      );
+      actionGuardRef.current = false;
+      setActionLoading(false);
+      toast.update(toastId, {
+        render: "Game already started. You can't join.",
+        type: "error",
+        isLoading: false,
+        autoClose: 5000,
+      });
+      toast.dismiss(toastId);
+      return;
+    }
+
     try {
       setJoinError(null);
       toast.update(toastId, { render: "Joining game on-chain (Dojo)..." });
@@ -571,6 +606,7 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
     stakePerPlayer,
     contractId,
     tournamentLobby,
+    isContractGameOpen,
   ]);
 
   const handleLeaveGame = useCallback(async () => {
@@ -625,6 +661,7 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
     contractGame,
     contractGameLoading,
     contractGameError,
+    isContractGameOpen,
     contractId,
     username,
     contractAddress,
