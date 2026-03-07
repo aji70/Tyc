@@ -16,6 +16,16 @@ import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { MINIPAY_CHAIN_IDS } from "@/constants/contracts";
 import { usernameToFelt, codeToFelt, gameTypeToDojo, symbolToDojo } from "@/lib/dojo/calldata";
 
+/** Backend expects this chain name so User.resolveUserByAddress finds the user (same as HeroSection / login-by-wallet). */
+function chainToBackendChain(chain: { id?: number | bigint; name?: string } | undefined): string {
+  const id = Number(chain?.id ?? 0);
+  if (id === 137 || id === 80001) return "POLYGON";
+  if (id === 8453 || id === 84531) return "BASE";
+  if (id === 42220 || id === 44787) return "CELO";
+  // Starknet mainnet / Sepolia and any other -> Starknet (backend normalizes to STARKNET)
+  return "Starknet";
+}
+
 export const AI_ADDRESSES = [
   "0xA1FF1c93600c3487FABBdAF21B1A360630f8bac6",
   "0xB2EE17D003e63985f3648f6c1d213BE86B474B11",
@@ -86,7 +96,7 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
   const registrySupported = false;
 
   const isMiniPay = false;
-  const chainName = chain?.name?.toLowerCase().replace(" ", "") || "starknet";
+  const chainName = chainToBackendChain(chain);
 
   const [settings, setSettings] = useState<AIGameSettings>(DEFAULT_SETTINGS);
   const [isCreatePending, setIsCreatePending] = useState(false);
