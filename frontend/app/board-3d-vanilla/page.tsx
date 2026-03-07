@@ -29,21 +29,21 @@ const DEMO_DEVELOPMENT: Record<number, number> = {
   1: 2, 3: 1, 6: 1, 8: 3, 11: 1, 16: 4, 18: 2, 21: 1, 24: 3, 27: 1, 31: 2, 34: 1, 37: 5, 39: 2,
 };
 
-const HOUSE_SIZE = 0.14;
-const HOUSE_HEIGHT = 0.12;
-const HOTEL_SIZE = 0.22;
-const HOTEL_HEIGHT = 0.2;
+const HOUSE_SIZE = 0.2;
+const HOUSE_HEIGHT = 0.18;
+const HOTEL_SIZE = 0.28;
+const HOTEL_HEIGHT = 0.26;
 
-/** Same property/tile colors as R3F BoardScene (buildMockProperties). */
+/** Property/tile colors. Chance, Community Chest, and Tax use unique colors. */
 const TILE_COLORS: { id: number; color: string }[] = [
-  { id: 0, color: "#2ecc71" }, { id: 1, color: "#8B4513" }, { id: 2, color: "#8B4513" }, { id: 3, color: "#8B4513" }, { id: 4, color: "#fff" },
-  { id: 5, color: "railroad" }, { id: 6, color: "#87CEEB" }, { id: 7, color: "#87CEEB" }, { id: 8, color: "#87CEEB" }, { id: 9, color: "#87CEEB" },
+  { id: 0, color: "#2ecc71" }, { id: 1, color: "#8B4513" }, { id: 2, color: "community_chest" }, { id: 3, color: "#8B4513" }, { id: 4, color: "income_tax" },
+  { id: 5, color: "railroad" }, { id: 6, color: "#87CEEB" }, { id: 7, color: "chance" }, { id: 8, color: "#87CEEB" }, { id: 9, color: "#87CEEB" },
   { id: 10, color: "#7f8c8d" }, { id: 11, color: "#FF69B4" }, { id: 12, color: "utility" }, { id: 13, color: "#FF69B4" }, { id: 14, color: "#FF69B4" },
-  { id: 15, color: "railroad" }, { id: 16, color: "#FFA500" }, { id: 17, color: "#FFA500" }, { id: 18, color: "#FFA500" }, { id: 19, color: "#FFA500" },
-  { id: 20, color: "#3498db" }, { id: 21, color: "#FF0000" }, { id: 22, color: "#FF0000" }, { id: 23, color: "#FF0000" }, { id: 24, color: "#FF0000" },
+  { id: 15, color: "railroad" }, { id: 16, color: "#FFA500" }, { id: 17, color: "community_chest" }, { id: 18, color: "#FFA500" }, { id: 19, color: "#FFA500" },
+  { id: 20, color: "#3498db" }, { id: 21, color: "#FF0000" }, { id: 22, color: "chance" }, { id: 23, color: "#FF0000" }, { id: 24, color: "#FF0000" },
   { id: 25, color: "railroad" }, { id: 26, color: "#FFD700" }, { id: 27, color: "#FFD700" }, { id: 28, color: "utility" }, { id: 29, color: "#FFD700" },
-  { id: 30, color: "#e74c3c" }, { id: 31, color: "#228B22" }, { id: 32, color: "#228B22" }, { id: 33, color: "#228B22" }, { id: 34, color: "#228B22" },
-  { id: 35, color: "railroad" }, { id: 36, color: "#0000CD" }, { id: 37, color: "#0000CD" }, { id: 38, color: "#0000CD" }, { id: 39, color: "#0000CD" },
+  { id: 30, color: "#e74c3c" }, { id: 31, color: "#228B22" }, { id: 32, color: "#228B22" }, { id: 33, color: "community_chest" }, { id: 34, color: "#228B22" },
+  { id: 35, color: "railroad" }, { id: 36, color: "chance" }, { id: 37, color: "#0000CD" }, { id: 38, color: "luxury_tax" }, { id: 39, color: "#0000CD" },
 ];
 
 function hexToThreeColor(hex: string): THREE.Color {
@@ -96,12 +96,20 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
   const tileGeom = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
   const railroadColor = new THREE.Color(0xf2f2f5);
   const utilityColor = new THREE.Color(0xf4d03f);
+  const chanceColor = new THREE.Color(0xf39c12);       // orange/gold
+  const communityChestColor = new THREE.Color(0x1abc9c); // teal
+  const incomeTaxColor = new THREE.Color(0xbdc3c7);     // light gray
+  const luxuryTaxColor = new THREE.Color(0x9b59b6);     // purple
   const materialCache = new Map<string, THREE.MeshStandardMaterial>();
   function getMaterial(colorSpec: string): THREE.MeshStandardMaterial {
     let key = colorSpec;
     let color: THREE.Color;
     if (colorSpec === "railroad") color = railroadColor;
     else if (colorSpec === "utility") color = utilityColor;
+    else if (colorSpec === "chance") color = chanceColor;
+    else if (colorSpec === "community_chest") color = communityChestColor;
+    else if (colorSpec === "income_tax") color = incomeTaxColor;
+    else if (colorSpec === "luxury_tax") color = luxuryTaxColor;
     else color = hexToThreeColor(colorSpec);
     key = color.getStyle();
     if (!materialCache.has(key)) materialCache.set(key, getTileMaterial(color));
@@ -112,8 +120,8 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
 
   const houseGeom = new THREE.BoxGeometry(HOUSE_SIZE, HOUSE_HEIGHT, HOUSE_SIZE);
   const hotelGeom = new THREE.BoxGeometry(HOTEL_SIZE, HOTEL_HEIGHT, HOTEL_SIZE);
-  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.85, metalness: 0.05 });
-  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.85, metalness: 0.05 });
+  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.6, metalness: 0.1 });
+  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6, metalness: 0.1 });
 
   for (let i = 0; i < 40; i++) {
     const [x, , z] = getPosition3D(i);
@@ -148,7 +156,7 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
       hotel.castShadow = true;
       scene.add(hotel);
     } else {
-      const step = 0.2;
+      const step = 0.26;
       const offsets: [number, number][] =
         level === 1 ? [[0, 0]] :
         level === 2 ? [[-step / 2, 0], [step / 2, 0]] :
