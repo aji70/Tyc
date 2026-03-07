@@ -15,6 +15,7 @@ const PUBLIC_PATHS = [
   "/waitlist",
   "/rooms",
   "/wasmdemo",
+  "/read-demo",
 ];
 
 function isPublicPath(pathname: string): boolean {
