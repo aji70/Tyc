@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, Suspense } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useMediaQuery } from "@/components/useMediaQuery";
@@ -42,6 +41,7 @@ import PlayerSection3D from "@/components/game/board3d/PlayerSection3D";
 import PerksBar from "@/components/game/board3d/PerksBar";
 import GameyChatRoom from "@/components/game/board3d/GameyChatRoom";
 import AiBoard3DView from "@/components/game/board3d/AiBoard3DView";
+import { postToCanvas } from "@/lib/board3d-iframe-messages";
 
 const MOVE_ANIMATION_MS_PER_SQUARE = 250;
 
@@ -69,14 +69,7 @@ function makeHistoryEntry(id: number, player_name: string, comment: string, roll
   };
 }
 
-const Canvas = dynamic(
-  () => import("@react-three/fiber").then((m) => m.Canvas),
-  { ssr: false }
-);
-const BoardScene = dynamic(
-  () => import("@/components/game/board3d/BoardScene").then((m) => m.default),
-  { ssr: false }
-);
+// 3D board runs in iframe (/board-3d-canvas) to isolate R3F from Cartridge (avoids ReactCurrentBatchConfig).
 
 // Same as 2D boards: fetch properties from backend for names and grid layout
 function useBoardProperties() {
@@ -310,7 +303,9 @@ function Board3DPageContent() {
   const [canvasKey, setCanvasKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
   const [canvasMounted, setCanvasMounted] = useState(false);
+  const [canvasIframeReady, setCanvasIframeReady] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const canvasIframeRef = useRef<HTMLIFrameElement>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const pendingShowCardModalRef = useRef(false);
   const pendingBuyPromptRef = useRef(false);
@@ -1663,12 +1658,14 @@ function Board3DPageContent() {
       if (e.persisted) {
         setCanvasMounted(false);
         setCanvasReady(false);
+        setCanvasIframeReady(false);
       }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         setCanvasMounted(false);
         setCanvasReady(false);
+        setCanvasIframeReady(false);
       }
     };
     window.addEventListener("pageshow", onPageShow);
@@ -1691,6 +1688,7 @@ function Board3DPageContent() {
   useLayoutEffect(() => {
     if (!showCanvasArea) {
       setCanvasMounted(false);
+      setCanvasIframeReady(false);
       return;
     }
     const container = canvasContainerRef.current;
@@ -1706,6 +1704,41 @@ function Board3DPageContent() {
       cancelAnimationFrame(id);
     };
   }, [showCanvasArea]);
+
+  // When iframe mounts, start sending state after short delay (in case READY message is missed).
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current) return;
+    const t = window.setTimeout(() => setCanvasIframeReady(true), 400);
+    return () => window.clearTimeout(t);
+  }, [canvasMounted, showCanvasArea]);
+
+  // Handle messages from 3D canvas iframe (ready, roll, property click, dice complete, focus complete).
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.source !== "tycoon-board3d-canvas") return;
+      switch (e.data.type) {
+        case "BOARD_3D_READY":
+          setCanvasIframeReady(true);
+          break;
+        case "ROLL_CLICK":
+          onRollClick();
+          break;
+        case "SQUARE_CLICK": {
+          const prop = properties.find((p) => p.id === e.data.propertyId);
+          if (prop) handlePropertyClick(prop);
+          break;
+        }
+        case "DICE_COMPLETE":
+          onDiceCompleteClick();
+          break;
+        case "FOCUS_COMPLETE":
+          onFocusComplete();
+          break;
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [onRollClick, handlePropertyClick, onDiceCompleteClick, onFocusComplete, properties]);
 
   useEffect(() => {
     setStrategyRanThisTurn(false);
@@ -1847,6 +1880,53 @@ function Board3DPageContent() {
   const historyToShow = isLiveGame && game?.history?.length ? game.history : demoHistory;
   // Live game: only show actual dice we rolled (never reconstruct from history — backend only has total, so we'd show wrong e.g. 3+3=6)
   const lastRollResultToShow = isLiveGame ? lastRollResultLive : lastRollResult;
+
+  // Post state to 3D canvas iframe (isolates R3F from Cartridge to avoid ReactCurrentBatchConfig).
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current || !canvasIframeReady) return;
+    postToCanvas(canvasIframeRef.current, {
+      type: "BOARD_3D_STATE",
+      payload: {
+        properties,
+        players,
+        animatedPositions: positions,
+        currentPlayerId: isLiveGame ? currentPlayerId : 1,
+        developmentByPropertyId,
+        ownerByPropertyId: isLiveGame ? ownerByPropertyId : undefined,
+        rollingDice: rollingDice ?? undefined,
+        lastRollResult: lastRollResultToShow ?? undefined,
+        rollLabel: undefined,
+        history: historyToShow,
+        aiThinking: isLiveGame && !isMyTurn && currentPlayerId != null,
+        thinkingLabel: isLiveGame && !isMyTurn && currentPlayer ? `${currentPlayer.username ?? "Player"} is thinking...` : undefined,
+        resetViewTrigger,
+        focusTilePosition: landedPositionForBuy ?? undefined,
+        spinOrbitDegrees,
+        showRollUi,
+        isLiveGame,
+      },
+    });
+  }, [
+    canvasMounted,
+    showCanvasArea,
+    canvasIframeReady,
+    properties,
+    players,
+    positions,
+    isLiveGame,
+    currentPlayerId,
+    developmentByPropertyId,
+    ownerByPropertyId,
+    rollingDice,
+    lastRollResultToShow,
+    historyToShow,
+    isMyTurn,
+    currentPlayer,
+    resetViewTrigger,
+    landedPositionForBuy,
+    spinOrbitDegrees,
+    showRollUi,
+  ]);
 
   const gameEnded = gameError && (gameQueryError as Error)?.message === "Game ended";
   if (gameEnded) {
@@ -2118,32 +2198,13 @@ function Board3DPageContent() {
               {canvasReady ? (
                 <div ref={canvasContainerRef} className="absolute inset-0 w-full h-full min-h-0">
                   {canvasMounted ? (
-                    <Canvas
-                      key={canvasKey}
-                      camera={{ position: [0, 12, 12], fov: 45 }}
-                      shadows
-                      gl={{ antialias: true, alpha: false }}
-                    >
-                      <BoardScene
-                        properties={properties}
-                        players={players}
-                        animatedPositions={positions}
-                        currentPlayerId={isLiveGame ? currentPlayerId : 1}
-                        developmentByPropertyId={developmentByPropertyId}
-                        ownerByPropertyId={isLiveGame ? ownerByPropertyId : undefined}
-                        onSquareClick={handlePropertyClick}
-                        rollingDice={rollingDice ?? undefined}
-                        onDiceComplete={isLiveGame ? onDiceCompleteClick : (showRollUi ? onDiceCompleteClick : undefined)}
-                        lastRollResult={lastRollResultToShow}
-                        onRoll={showRollUi ? onRollClick : undefined}
-                        history={historyToShow}
-                        aiThinking={isLiveGame && !isMyTurn && currentPlayerId != null}
-                        resetViewTrigger={resetViewTrigger}
-                        focusTilePosition={landedPositionForBuy}
-                        onFocusComplete={onFocusComplete}
-                        spinOrbitDegrees={spinOrbitDegrees}
-                      />
-                    </Canvas>
+                    <iframe
+                      ref={canvasIframeRef}
+                      src="/board-3d-canvas"
+                      title="3D Board"
+                      className="absolute inset-0 w-full h-full border-0 bg-[#010F10]"
+                      sandbox="allow-scripts allow-same-origin"
+                    />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center gap-2 text-slate-400">
                       <div className="w-8 h-8 rounded-full border-2 border-cyan-500/50 border-t-cyan-400 animate-spin" />
