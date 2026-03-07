@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getPosition3D } from "@/components/game/board3d/positions";
 import { BOARD_SQUARE_NAMES } from "@/components/game/board3d/squareNames";
+import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 
 /**
  * Skeletal 3D Monopoly-style board using vanilla Three.js only (no R3F).
@@ -198,9 +199,35 @@ export default function Board3DVanillaPage() {
     };
   }, []);
 
+  const { account, connectors, connectWallet, disconnectWallet } = useStarknetWallet();
+  const isConnected = !!account;
+
   return (
-    <div className="fixed inset-0 w-full h-full bg-[#010F10]">
-      <div ref={containerRef} className="w-full h-full" />
+    <div className="fixed inset-0 w-full h-full bg-[#010F10] flex flex-col">
+      {/* Cartridge bar: visible on same page as vanilla 3D board to test no crash */}
+      <div className="flex-shrink-0 h-12 px-4 flex items-center justify-between bg-[#0a1214] border-b border-cyan-500/30 z-10">
+        <span className="text-cyan-400/90 text-sm font-medium">Vanilla 3D board + Cartridge</span>
+        <div className="flex items-center gap-2">
+          {isConnected ? (
+            <button
+              type="button"
+              onClick={() => disconnectWallet()}
+              className="px-3 py-1.5 rounded-lg bg-rose-900/60 text-rose-200 text-sm border border-rose-500/50"
+            >
+              Disconnect
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => connectors[0] && connectWallet(connectors[0])}
+              className="px-3 py-1.5 rounded-lg bg-cyan-900/60 text-cyan-200 text-sm border border-cyan-500/50"
+            >
+              Connect Cartridge
+            </button>
+          )}
+        </div>
+      </div>
+      <div ref={containerRef} className="flex-1 min-h-0 w-full" />
     </div>
   );
 }
