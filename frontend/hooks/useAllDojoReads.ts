@@ -9,6 +9,7 @@ import {
   GAME_VIEW_ABI,
   REWARD_VIEW_ABI,
 } from '@/lib/dojo-contracts';
+import { codeToFelt } from '@/lib/dojo/calldata';
 
 /** Normalize Starknet address to canonical felt (0x + 64 hex chars). */
 function addressToFelt(addr: string): bigint {
@@ -116,7 +117,7 @@ export function useAllDojoReads() {
 
   // Game
   const getGame = useCallback((gameId: bigint | string) => callRead('game', 'get_game', [BigInt(gameId)]), [callRead]);
-  const getGameByCode = useCallback((code: string) => callRead('game', 'get_game_by_code', [usernameToFelt(code)]), [callRead]);
+  const getGameByCode = useCallback((code: string) => callRead('game', 'get_game_by_code', [codeToFelt(code)]), [callRead]);
   const getGamePlayer = useCallback(
     (gameId: bigint | string, playerAddress: string) =>
       callRead('game', 'get_game_player', [BigInt(gameId), addressToFelt(playerAddress)]),
