@@ -1,4 +1,8 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -6,8 +10,11 @@ const nextConfig = {
     // Ignore type errors in dependencies (e.g. @ethereumjs/tx overload signature)
     ignoreBuildErrors: true,
   },
-  // Dojo SDK uses @dojoengine/torii-wasm (.wasm). Webpack's parser can fail on modern WASM features;
-  // set NEXT_PUBLIC_SKIP_STARKNET=1 to build without Dojo (app runs without Starknet).
+  // Avoid "multiple lockfiles" warning when building from repo root (e.g. Vercel)
+  outputFileTracingRoot: __dirname,
+  // Next 15 + ESLint 8 can pass invalid options during build; ignore so WASM/Dojo build succeeds
+  eslint: { ignoreDuringBuilds: true },
+  // Dojo SDK uses @dojoengine/torii-wasm (.wasm). Requires Next 15+ (webpack 5.97+) for WASM reference types.
   webpack(config, { isServer, dev }) {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.output.webassemblyModuleFilename =
