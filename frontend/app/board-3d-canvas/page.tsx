@@ -18,6 +18,9 @@ const BOARD_3D_MESSAGE_SOURCE = "tycoon-board3d-canvas";
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
 const CAMERA_LOOK_AT: [number, number, number] = [0, 0, 0];
 
+/** Cached center board texture so we load once and avoid flicker from re-loading on every state change. */
+let cachedBoardTexture: THREE.Texture | null = null;
+
 const DICE_ROLL_MS = 1400;
 const DICE_SIZE = 0.6;
 /** Rotations so face 1..6 shows on top (x, y, z in radians). */
@@ -109,19 +112,31 @@ export default function Board3DCanvasPage() {
     });
     sceneRef.current = scene;
 
-    // Center board decal (same as R3F BoardCenter with /bb.jpg)
-    const texLoader = new THREE.TextureLoader();
-    texLoader.load("/bb.jpg", (texture) => {
-      if (!sceneRef.current) return;
+    // Center board decal (same as R3F BoardCenter with /bb.jpg) — load once, no depth write to avoid flicker
+    function addCenterPlane(scene: THREE.Scene, texture: THREE.Texture) {
       const plane = new THREE.Mesh(
         new THREE.PlaneGeometry(7, 7),
-        new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.92 })
+        new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          depthTest: true,
+        })
       );
       plane.rotation.x = -Math.PI / 2;
-      plane.position.set(0, 0.012, 0);
-      plane.receiveShadow = true;
-      sceneRef.current.add(plane);
-    });
+      plane.position.set(0, 0.025, 0); // slightly above board to avoid z-fight
+      scene.add(plane);
+    }
+    if (cachedBoardTexture) {
+      addCenterPlane(scene, cachedBoardTexture);
+    } else {
+      const texLoader = new THREE.TextureLoader();
+      texLoader.load("/bb.jpg", (texture) => {
+        cachedBoardTexture = texture;
+        if (sceneRef.current) addCenterPlane(sceneRef.current, texture);
+      });
+    }
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(...CAMERA_POSITION);

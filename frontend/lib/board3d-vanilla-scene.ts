@@ -93,10 +93,9 @@ export function getColorSpec(prop: Property): string {
   return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
 }
 
-/** Create a texture with text (e.g. "?", "Chest", "$") for Chance/Chest/Tax labels. */
-function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: string; bgColor?: string } = {}): THREE.CanvasTexture {
-  const { fontSize = 32, fontColor = "#1a1a1a", bgColor = "transparent" } = opts;
-  const size = 64;
+/** Create a texture with text for tile labels (Chance ?, Chest, $, Jail, Go to Jail). Higher res for clarity. */
+function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: string; bgColor?: string; size?: number } = {}): THREE.CanvasTexture {
+  const { fontSize = 36, fontColor = "#1a1a1a", bgColor = "transparent", size = 128 } = opts;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -220,6 +219,11 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       signBoard.position.set(x, 0.28, z);
       signBoard.castShadow = true;
       scene.add(signBoard);
+      const goTex = makeTextTexture("GO", { fontSize: 28, fontColor: "#0f172a", size: 128 });
+      const goSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: goTex, transparent: true, depthTest: false }));
+      goSprite.position.set(x, 0.28, z);
+      goSprite.scale.set(0.4, 0.2, 1);
+      scene.add(goSprite);
     } else if (i === 10) {
       const jailBase = new THREE.Mesh(new THREE.BoxGeometry(size * 0.7, 0.32, size * 0.7), new THREE.MeshStandardMaterial({ color: 0x5d6d7e }));
       jailBase.position.set(x, 0.18, z);
@@ -237,6 +241,11 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
         bar.castShadow = true;
         scene.add(bar);
       }
+      const jailTex = makeTextTexture("Jail", { fontSize: 22, fontColor: "#fff", size: 128 });
+      const jailSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: jailTex, transparent: true, depthTest: false }));
+      jailSprite.position.set(x, 0.28, z);
+      jailSprite.scale.set(0.5, 0.2, 1);
+      scene.add(jailSprite);
     } else if (i === 20) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), new THREE.MeshStandardMaterial({ color: 0x5d4037 }));
       post.position.set(x, 0.12, z);
@@ -270,6 +279,11 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
         goBar.castShadow = true;
         scene.add(goBar);
       }
+      const goToJailTex = makeTextTexture("Go to Jail", { fontSize: 14, fontColor: "#fff", size: 128 });
+      const goToJailSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: goToJailTex, transparent: true, depthTest: false }));
+      goToJailSprite.position.set(x, 0.32, z);
+      goToJailSprite.scale.set(0.55, 0.18, 1);
+      scene.add(goToJailSprite);
     }
     // ---- RAILROADS ----
     else if (i === 5 || i === 15 || i === 25 || i === 35) {
@@ -308,10 +322,10 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       card.position.set(x, 0.2, z);
       card.castShadow = true;
       scene.add(card);
-      const chanceTex = makeTextTexture("?", { fontSize: 28, fontColor: "#1a1a1a" });
+      const chanceTex = makeTextTexture("?", { fontSize: 48, fontColor: "#1a1a1a", size: 128 });
       const chanceSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: chanceTex, transparent: true, depthTest: false }));
       chanceSprite.position.set(x, 0.22, z);
-      chanceSprite.scale.set(0.35, 0.35, 1);
+      chanceSprite.scale.set(0.5, 0.5, 1);
       scene.add(chanceSprite);
     }
     // ---- COMMUNITY CHEST: treasure chest + "Chest" label ----
@@ -340,10 +354,10 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       lock.position.set(x, 0.1, z + size * 0.19);
       lock.castShadow = true;
       scene.add(lock);
-      const chestTex = makeTextTexture("Chest", { fontSize: 12, fontColor: "#fff" });
+      const chestTex = makeTextTexture("Chest", { fontSize: 20, fontColor: "#fff", size: 128 });
       const chestSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: chestTex, transparent: true, depthTest: false }));
       chestSprite.position.set(x, 0.22, z);
-      chestSprite.scale.set(0.4, 0.15, 1);
+      chestSprite.scale.set(0.55, 0.22, 1);
       scene.add(chestSprite);
     }
     // ---- TAX: tax office + $ label ----
@@ -360,10 +374,10 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       roof.position.set(x, 0.34, z);
       roof.castShadow = true;
       scene.add(roof);
-      const taxTex = makeTextTexture("$", { fontSize: 14, fontColor: "#fff" });
+      const taxTex = makeTextTexture("$", { fontSize: 32, fontColor: "#fff", size: 128 });
       const taxSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: taxTex, transparent: true, depthTest: false }));
       taxSprite.position.set(x, 0.22, z);
-      taxSprite.scale.set(0.3, 0.3, 1);
+      taxSprite.scale.set(0.45, 0.45, 1);
       scene.add(taxSprite);
     }
     // ---- PROPERTIES: terraced building + pitched roof + houses/hotel on top ----
