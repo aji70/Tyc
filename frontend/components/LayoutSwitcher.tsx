@@ -83,13 +83,14 @@ const EXTERNAL_DETECT_WALLETS_SHIM = `
 })();
 `;
 
-/** Canvas route: no Cartridge/LayoutBody so R3F runs in isolation and avoids ReactCurrentBatchConfig. */
-const CANVAS_ROUTE = '/board-3d-canvas';
+/** Routes with minimal layout (no Cartridge): avoids ReactCurrentBatchConfig and keeps 3D isolated. */
+const MINIMAL_LAYOUT_ROUTES = ['/board-3d-canvas', '/board-3d-vanilla'];
 
 export function LayoutSwitcher({ children, cookies }: { children: ReactNode; cookies: string | null }) {
   const pathname = usePathname();
+  const useMinimalLayout = MINIMAL_LAYOUT_ROUTES.some((route) => pathname === route || pathname?.startsWith(route + '/'));
 
-  if (pathname === CANVAS_ROUTE) {
+  if (useMinimalLayout) {
     return (
       <div className="min-h-screen bg-[#010F10] w-full" suppressHydrationWarning>
         {children}
