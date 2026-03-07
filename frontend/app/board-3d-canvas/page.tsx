@@ -318,76 +318,67 @@ export default function Board3DCanvasPage() {
           {hoveredTile.name}
         </div>
       )}
-      {/* Center overlay: board-style panel with roll/dice + action log (match R3F board) */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-10">
-        <div
-          className="pointer-events-auto flex flex-col w-[340px] max-w-[calc(100vw-2rem)] max-h-[85vh] rounded-xl border-2 border-cyan-500/40 bg-slate-900/95 shadow-xl overflow-hidden"
-          style={{ minHeight: "min(400px, 70vh)" }}
-        >
-          <div className="flex flex-col items-center justify-center gap-3 py-4 px-2 shrink-0">
-            {aiThinking && (
-              <div
-                className="text-lg font-semibold text-amber-400 whitespace-nowrap drop-shadow-[0_0_8px_rgba(0,0,0,0.9)]"
-                style={{ textShadow: "0 0 8px #000, 0 1px 4px #000" }}
-              >
-                {thinkingLabel}
+      {/* Center: compact roll/dice/thinking only */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
+        <div className="pointer-events-auto flex flex-col items-center gap-3 py-3 px-4 rounded-xl border-2 border-cyan-500/40 bg-slate-900/90 shadow-xl">
+          {aiThinking && (
+            <div
+              className="text-lg font-semibold text-amber-400 whitespace-nowrap"
+              style={{ textShadow: "0 0 8px #000, 0 1px 4px #000" }}
+            >
+              {thinkingLabel}
+            </div>
+          )}
+          {lastRollResult && !rollingDice && (
+            <div className="flex flex-col items-center gap-1">
+              {rollLabel && (
+                <span className="text-base font-semibold text-white/90 whitespace-nowrap" style={{ textShadow: "0 0 6px #000" }}>
+                  {rollLabel}
+                </span>
+              )}
+              <div className="flex flex-row items-center justify-center gap-2 text-3xl font-extrabold text-white" style={{ textShadow: "0 0 10px #000" }}>
+                <span className="text-cyan-400">{lastRollResult.die1}</span>
+                <span>+</span>
+                <span className="text-pink-400">{lastRollResult.die2}</span>
+                <span>=</span>
+                <span className="text-amber-400">{lastRollResult.total}</span>
               </div>
-            )}
-            {lastRollResult && !rollingDice && (
-              <div className="flex flex-col items-center gap-2">
-                {rollLabel && (
-                  <span
-                    className="text-xl font-semibold text-white/90 whitespace-nowrap"
-                    style={{ textShadow: "0 0 8px #000, 0 1px 4px #000" }}
-                  >
-                    {rollLabel}
-                  </span>
-                )}
-                <div
-                  className="flex flex-row items-center justify-center gap-3 text-4xl font-extrabold text-white"
-                  style={{ textShadow: "0 0 12px #000, 0 2px 6px #000" }}
-                >
-                  <span className="text-cyan-400">{lastRollResult.die1}</span>
-                  <span>+</span>
-                  <span className="text-pink-400">{lastRollResult.die2}</span>
-                  <span>=</span>
-                  <span className="text-amber-400">{lastRollResult.total}</span>
-                </div>
-              </div>
-            )}
-            {showRollUi && !rollingDice && (
+            </div>
+          )}
+          {showRollUi && !rollingDice && (
+            <button
+              type="button"
+              aria-label="Roll dice"
+              onClick={onRollClick}
+              className="px-5 py-2.5 text-sm font-bold text-slate-900 uppercase tracking-wider rounded-lg border-2 border-cyan-700 shadow-[0_4px_0_#0e7490,0_6px_16px_rgba(0,0,0,0.35)] cursor-pointer hover:opacity-95 active:translate-y-0.5 active:shadow-[0_2px_0_#0e7490] transition-all bg-gradient-to-b from-cyan-300 via-cyan-400 to-cyan-500"
+            >
+              Roll
+            </button>
+          )}
+          {rollingDice && (
+            <div className="flex items-center gap-3">
+              <span className="text-cyan-200 text-sm font-medium">Rolling…</span>
               <button
                 type="button"
-                aria-label="Roll dice"
-                onClick={onRollClick}
-                className="px-5 py-2.5 text-sm font-bold text-slate-900 uppercase tracking-wider rounded-lg border-2 border-cyan-700 shadow-[0_4px_0_#0e7490,0_6px_16px_rgba(0,0,0,0.35)] cursor-pointer hover:opacity-95 active:translate-y-0.5 active:shadow-[0_2px_0_#0e7490] transition-all bg-gradient-to-b from-cyan-300 via-cyan-400 to-cyan-500"
+                onClick={onDiceComplete}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
               >
-                Roll
+                Done
               </button>
-            )}
-            {rollingDice && (
-              <div className="flex items-center gap-3">
-                <span className="text-cyan-200 text-sm font-medium">Rolling…</span>
-                <button
-                  type="button"
-                  onClick={onDiceComplete}
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
-                >
-                  Done
-                </button>
-              </div>
-            )}
-          </div>
-          {history && history.length > 0 && (
-            <div className="flex-1 min-h-[180px] max-h-[300px] flex flex-col border-t border-cyan-500/30 overflow-auto">
-              <ActionLog
-                history={history}
-                className="!mt-0 !min-h-[180px] !rounded-none !border-0 !bg-transparent"
-              />
             </div>
           )}
         </div>
       </div>
+
+      {/* Action log: fixed at bottom, own card */}
+      {history && history.length > 0 && (
+        <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2 z-10 w-[320px] max-w-[calc(100vw-2rem)]">
+          <ActionLog
+            history={history}
+            className="!mt-0 !h-40 !max-h-40 !min-h-0 !rounded-lg !border-2 !border-cyan-500/40 !bg-slate-900/95 !shadow-lg overflow-y-auto"
+          />
+        </div>
+      )}
     </div>
   );
 }
