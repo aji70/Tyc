@@ -58,7 +58,7 @@ export default function AiPlay3DPage() {
     if (trimmed.length === 6) {
       setGameCode(trimmed);
       localStorage.setItem("gameCode", trimmed);
-      router.replace(`/ai-play-3d?gameCode=${encodeURIComponent(trimmed)}`);
+      router.replace(`/board-3d?gameCode=${encodeURIComponent(trimmed)}`);
     }
   }, [codeInput, router]);
 
@@ -80,10 +80,15 @@ export default function AiPlay3DPage() {
     refetchInterval: 5000,
   });
 
+  // Non-AI game → 2D multiplayer; AI game → real 3D board lives at board-3d
   useEffect(() => {
     if (!game || !gameCode) return;
     if (game.is_ai === false || game.is_ai === undefined) {
       router.replace(`/game-play?gameCode=${encodeURIComponent(gameCode)}`);
+      return;
+    }
+    if (game.is_ai === true) {
+      router.replace(`/board-3d?gameCode=${encodeURIComponent(gameCode)}`);
     }
   }, [game, gameCode, router]);
 
@@ -200,45 +205,71 @@ export default function AiPlay3DPage() {
   );
   const showRollUi = playerCanRoll && !isRolling && !buyPrompted;
 
+  const canvasStatePayload = useMemo(
+    () => ({
+      properties,
+      players: game?.players ?? [],
+      animatedPositions: positions,
+      currentPlayerId: currentPlayer?.user_id ?? null,
+      developmentByPropertyId,
+      ownerByPropertyId,
+      lastRollResult: lastRollResult ?? undefined,
+      rollLabel: lastRollResult ? "You rolled" : undefined,
+      history: game?.history ?? [],
+      aiThinking: isAITurn,
+      thinkingLabel: currentPlayer ? `${currentPlayer.username || "Player"} is thinking...` : undefined,
+      showRollUi,
+      isLiveGame: true,
+    }),
+    [
+      properties,
+      game?.players,
+      positions,
+      currentPlayer,
+      developmentByPropertyId,
+      ownerByPropertyId,
+      lastRollResult,
+      isAITurn,
+      showRollUi,
+      game?.history,
+    ]
+  );
+
+  // Send state when iframe is ready (or we think it might be)
   useEffect(() => {
     if (!canvasMounted || !canvasIframeRef.current || !canvasIframeReady) return;
     postToCanvas(canvasIframeRef.current, {
       type: "BOARD_3D_STATE",
-      payload: {
-        properties,
-        players: game?.players ?? [],
-        animatedPositions: positions,
-        currentPlayerId: currentPlayer?.user_id ?? null,
-        developmentByPropertyId,
-        ownerByPropertyId,
-        lastRollResult: lastRollResult ?? undefined,
-        rollLabel: lastRollResult ? "You rolled" : undefined,
-        history: game?.history ?? [],
-        aiThinking: isAITurn,
-        thinkingLabel: currentPlayer ? `${currentPlayer.username || "Player"} is thinking...` : undefined,
-        showRollUi,
-        isLiveGame: true,
-      },
+      payload: canvasStatePayload,
     });
-  }, [
-    canvasMounted,
-    canvasIframeReady,
-    properties,
-    game?.players,
-    positions,
-    currentPlayer,
-    developmentByPropertyId,
-    ownerByPropertyId,
-    lastRollResult,
-    isAITurn,
-    showRollUi,
-    game?.history,
-  ]);
+  }, [canvasMounted, canvasIframeReady, canvasStatePayload]);
 
+  // Fallback: assume iframe ready after delay so we don't rely only on BOARD_3D_READY
   useEffect(() => {
+    if (!canvasMounted) return;
     const t = window.setTimeout(() => setCanvasIframeReady(true), 400);
     return () => window.clearTimeout(t);
   }, [canvasMounted]);
+
+  // Keep sending state every 400ms for 3s so the iframe gets it when it finishes loading (avoids "Waiting for game…" if READY is missed or iframe loads late)
+  useEffect(() => {
+    if (!canvasMounted || !canvasIframeRef.current || !game?.id || properties.length === 0) return;
+    const send = () => {
+      if (canvasIframeRef.current) {
+        postToCanvas(canvasIframeRef.current, {
+          type: "BOARD_3D_STATE",
+          payload: canvasStatePayload,
+        });
+      }
+    };
+    send();
+    const id = window.setInterval(send, 400);
+    const stop = window.setTimeout(() => window.clearInterval(id), 3000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+  }, [canvasMounted, game?.id, properties.length, canvasStatePayload]);
 
   const doRoll = useCallback(
     async (forPlayerId: number) => {
@@ -466,78 +497,11 @@ export default function AiPlay3DPage() {
     );
   }
 
-  // AI game: 3D board (desktop only; mobile is redirected above) — iframe same as board-3d-multi
+  // AI game: real 3D board lives at board-3d (desktop) / board-3d-mobile (mobile already redirected above)
   return (
-    <main className="w-full h-screen overflow-hidden relative flex flex-row bg-[#010F10] lg:gap-4 p-4">
-      <div className="hidden lg:block w-80 flex-shrink-0">
-        <GamePlayers
-          game={game}
-          properties={properties}
-          game_properties={game_properties}
-          my_properties={my_properties}
-          me={me}
-          currentPlayer={currentPlayer}
-          roll={lastRollResult}
-          isAITurn={isAITurn}
-          focusTrades={false}
-          onViewedTrades={() => {}}
-          isGuest={isGuest}
-        />
-      </div>
-      <div className="flex-1 min-w-0 relative rounded-xl overflow-hidden border border-cyan-500/30 aspect-square max-w-[1200px] bg-[#010F10]" style={{ isolation: "isolate" }}>
-        <div
-          ref={(el) => setCanvasMounted(!!el)}
-          className="absolute inset-0 w-full h-full"
-        >
-          <iframe
-            ref={canvasIframeRef}
-            src="/board-3d-canvas"
-            title="3D Board"
-            className="absolute inset-0 w-full h-full border-0 bg-[#010F10]"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        </div>
-      </div>
-      <Link
-        href={`/ai-play?gameCode=${encodeURIComponent(gameCode)}`}
-        className="absolute top-2 right-2 z-10 px-3 py-1.5 rounded-lg bg-slate-800/90 text-cyan-300 text-sm border border-cyan-500/50 hover:bg-slate-700"
-      >
-        2D board
-      </Link>
-
-      {/* Buy / Skip overlay when human lands on buyable property */}
-      <AnimatePresence>
-        {buyPrompted && justLandedProperty && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4 z-[2147483647]">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="rounded-2xl border-2 border-amber-500/50 bg-slate-900 p-6 max-w-sm w-full shadow-2xl"
-            >
-              <h3 className="text-lg font-bold text-amber-200 mb-2">You landed on {justLandedProperty.name}</h3>
-              <p className="text-slate-300 text-sm mb-4">
-                ${justLandedProperty.price?.toLocaleString()} — Buy or skip?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleBuy()}
-                  disabled={(me?.balance ?? 0) < (justLandedProperty.price ?? 0)}
-                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold"
-                >
-                  Buy
-                </button>
-                <button
-                  onClick={() => handleSkipBuy()}
-                  className="flex-1 py-3 rounded-xl bg-slate-600 hover:bg-slate-500 text-white font-bold"
-                >
-                  Skip
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </main>
+    <div className="w-full min-h-screen bg-[#010F10] flex items-center justify-center gap-4 text-cyan-300">
+      <Loader2 className="w-12 h-12 animate-spin" />
+      <p className="text-xl">Opening 3D board…</p>
+    </div>
   );
 }

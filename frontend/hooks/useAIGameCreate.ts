@@ -70,7 +70,7 @@ interface GameCreateResponse {
 }
 
 export interface UseAIGameCreateOptions {
-  /** When true, redirect to 3D board (ai-play-3d) after creating the game. */
+  /** When true, redirect to 3D board (board-3d) after creating the game. */
   redirectTo3D?: boolean;
 }
 
@@ -83,7 +83,7 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const redirectTo3D = options?.redirectTo3D ?? false;
   const { chain } = useNetwork();
-  const board3DUrl = redirectTo3D ? `/ai-play-3d?gameCode=` : null;
+  const board3DUrl = redirectTo3D ? `/board-3d?gameCode=` : null;
   const guestAuth = useGuestAuthOptional();
   const isGuest = !!guestAuth?.guestUser;
 

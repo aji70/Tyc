@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, Sus
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useMediaQuery } from "@/components/useMediaQuery";
 import { useQuery } from "@tanstack/react-query";
 import { useAccount } from "@starknet-react/core";
 import { apiClient } from "@/lib/api";
@@ -40,6 +41,7 @@ import { GameDurationCountdown } from "@/components/game/GameDurationCountdown";
 import PlayerSection3D from "@/components/game/board3d/PlayerSection3D";
 import PerksBar from "@/components/game/board3d/PerksBar";
 import GameyChatRoom from "@/components/game/board3d/GameyChatRoom";
+import AiBoard3DView from "@/components/game/board3d/AiBoard3DView";
 
 const MOVE_ANIMATION_MS_PER_SQUARE = 250;
 
@@ -213,6 +215,7 @@ const initialPositions: Record<number, number> = Object.fromEntries(
 function Board3DPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const isMobile = useMediaQuery("(max-width: 768px)");
   const gameCode = searchParams.get("gameCode")?.trim().toUpperCase() || null;
 
   const { address } = useAccount();
@@ -1853,6 +1856,50 @@ function Board3DPageContent() {
         <p className="text-gray-400 mb-6">This game has ended.</p>
         <button onClick={() => router.push("/")} className="px-8 py-4 bg-[#00F0FF] text-[#010F10] font-bold rounded-lg hover:bg-[#00F0FF]/80 transition-all">Go home</button>
       </div>
+    );
+  }
+
+  // Multiplayer 3D → use dedicated board-3d-multi (socket, etc.)
+  useEffect(() => {
+    if (!gameCode || !game || game.is_ai !== false) return;
+    router.replace(`/board-3d-multi?gameCode=${encodeURIComponent(gameCode)}`);
+  }, [gameCode, game?.is_ai, router]);
+
+  if (isLiveGame && game && game.is_ai === false) {
+    return (
+      <div className="w-full min-h-screen bg-[#010F10] flex items-center justify-center gap-4 text-cyan-300">
+        <Loader2 className="w-12 h-12 animate-spin" />
+        <p className="text-xl">Opening multiplayer board…</p>
+      </div>
+    );
+  }
+
+  // AI 3D on mobile → use dedicated mobile 3D board
+  if (isLiveGame && game && game.is_ai === true && isMobile) {
+    router.replace(`/board-3d-mobile?gameCode=${encodeURIComponent(gameCode)}`);
+    return (
+      <div className="w-full min-h-screen bg-[#010F10] flex items-center justify-center gap-4 text-cyan-300">
+        <Loader2 className="w-12 h-12 animate-spin" />
+        <p className="text-xl">Opening 3D board…</p>
+      </div>
+    );
+  }
+
+  // AI 3D (desktop) → real board lives here (iframe-based to avoid Cartridge + R3F conflict)
+  if (isLiveGame && game && game.is_ai === true) {
+    return (
+      <AiBoard3DView
+        game={game}
+        properties={properties}
+        game_properties={gameProperties}
+        gameCode={gameCode}
+        refetchGame={refetchGame}
+        me={me}
+        currentPlayer={currentPlayer}
+        isAITurn={isAITurn}
+        my_properties={my_properties}
+        isGuest={!!guestUser}
+      />
     );
   }
 
