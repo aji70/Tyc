@@ -218,15 +218,30 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
           },
         });
 
+        const payload = typeof saveRes?.data === "object" ? saveRes.data : saveRes;
+        if (payload && (payload as { success?: boolean }).success === false) {
+          const msg = (payload as { message?: string }).message || "Save failed";
+          throw new Error(
+            msg.toLowerCase().includes("user not found")
+              ? "Wallet not registered. Please sign in or register your wallet first."
+              : msg
+          );
+        }
+
         dbGameId =
           typeof saveRes === "string" || typeof saveRes === "number"
             ? saveRes
-            : saveRes?.data?.data?.id ?? saveRes?.data?.id ?? saveRes?.id;
+            : saveRes?.data?.data?.id ?? (saveRes?.data as { id?: number })?.id ?? saveRes?.id;
 
         if (!dbGameId) throw new Error("Backend did not return game ID");
       } catch (backendError: any) {
         console.error("Backend save error:", backendError);
-        throw new Error(backendError.response?.data?.message || "Failed to save game on server");
+        const msg =
+          backendError?.response?.data?.message ??
+          backendError?.message ??
+          "Failed to save game on server";
+        const status = backendError?.response?.status;
+        throw new Error(status ? `[${status}] ${msg}` : msg);
       }
 
       toast.update(toastId, { render: "Adding AI opponents..." });

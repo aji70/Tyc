@@ -46,8 +46,17 @@ const EXTERNAL_DETECT_WALLETS_SHIM = `
     try { Object.defineProperty(window, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); }
     catch (e) { window.externalDetectWallets = noop; }
   }
+  function isConnectorLike(obj) {
+    return obj && typeof obj === 'object' && typeof obj.connect === 'function' && typeof obj.disconnect === 'function';
+  }
   function patch(obj, depth) {
     if (!obj || typeof obj !== 'object' || (depth || 0) > 5) return;
+    if (isConnectorLike(obj) || typeof obj.connect === 'function') {
+      if (typeof obj.externalDetectWallets !== 'function') {
+        try { obj.externalDetectWallets = noop; } catch (e) {}
+        try { Object.defineProperty(obj, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); } catch (e) {}
+      }
+    }
     if (typeof obj.externalDetectWallets !== 'function') {
       try { obj.externalDetectWallets = noop; } catch (e) {}
       try { Object.defineProperty(obj, 'externalDetectWallets', { value: noop, writable: true, configurable: true }); } catch (e) {}
