@@ -71,8 +71,13 @@ export function getContractErrorMessage(
     return "Too many requests — please wait a moment before trying again.";
   }
 
-  // Connection / network errors
+  // RPC / starknet_call errors (transient; retries may help)
   const msgLower = (e?.message ?? e?.shortMessage ?? "").toLowerCase();
+  if (msgLower.includes("starknet_call") || msgLower.includes("rpc") && (msgLower.includes("error") || msgLower.includes("fail"))) {
+    return "RPC temporarily unavailable. Please try again in a moment.";
+  }
+
+  // Connection / network errors
   if (
     msgLower.includes("network") ||
     msgLower.includes("fetch failed") ||

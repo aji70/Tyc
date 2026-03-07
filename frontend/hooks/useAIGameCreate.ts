@@ -6,6 +6,7 @@ import { useAccount } from "@starknet-react/core";
 import { useNetwork } from "@starknet-react/core";
 import { toast } from "react-toastify";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
+import { withRpcRetry } from "@/lib/utils/rpcRetry";
 import { generateGameCode } from "@/lib/utils/games";
 import { GamePieces } from "@/lib/constants/games";
 import { apiClient } from "@/lib/api";
@@ -191,7 +192,7 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
       let onChainGameId: bigint | null = null;
       for (let i = 0; i < POLL_GAME_ID_ATTEMPTS; i++) {
         await new Promise((r) => setTimeout(r, POLL_GAME_ID_MS));
-        const raw = await getGameByCode(gameCode);
+        const raw = await withRpcRetry(() => getGameByCode(gameCode));
         const arr = Array.isArray(raw) ? raw : [raw];
         const id = arr[0] != null ? BigInt(String(arr[0])) : BigInt(0);
         if (id !== BigInt(0)) {
