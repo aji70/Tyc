@@ -18,7 +18,7 @@ import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 
 /**
  * AI game on 3D board. Step-by-step minimal flow:
- * - No game code → "Create AI game" (play-ai) or enter code
+ * - No game code → "Create AI game" (play-ai-3d) or enter code
  * - AI game + code → play on 3D board (AiBoard use3D)
  */
 export default function AiPlay3DPage() {
@@ -222,7 +222,7 @@ export default function AiPlay3DPage() {
           <button onClick={() => { setGameCode(""); setCodeInput(""); }} className="px-6 py-3 rounded-lg bg-cyan-600 text-white font-semibold">
             Enter another code
           </button>
-          <Link href="/play-ai" className="px-6 py-3 rounded-lg border border-cyan-500/50 text-cyan-300 font-semibold">
+          <Link href="/play-ai-3d" className="px-6 py-3 rounded-lg border border-cyan-500/50 text-cyan-300 font-semibold">
             Create AI game
           </Link>
         </div>
