@@ -3,8 +3,12 @@
  * Builds tiles, labels, buildings from properties and development state.
  */
 import * as THREE from "three";
-import { getPosition3D } from "@/components/game/board3d/positions";
+import { getPosition3D, getTokenOffset } from "@/components/game/board3d/positions";
+import { getPlayerSymbol } from "@/lib/types/symbol";
 import type { Property } from "@/types/game";
+
+/** Minimal player shape for token placement (from Board3DCanvasState). */
+export type BoardScenePlayer = { user_id: number; position?: number; symbol?: string };
 
 export const TILE_SIZE = 0.9;
 export const TILE_HEIGHT = 0.05;
@@ -80,6 +84,32 @@ export function getColorSpec(prop: Property): string {
   return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
 }
 
+/** Create a texture with the emoji drawn on a circular background (for player token sprites). */
+function makeEmojiTexture(emoji: string, isCurrent: boolean): THREE.CanvasTexture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = isCurrent ? "rgba(34, 211, 238, 0.5)" : "rgba(0,0,0,0.6)";
+  ctx.fill();
+  ctx.strokeStyle = isCurrent ? "#22d3ee" : "rgba(255,255,255,0.5)";
+  ctx.lineWidth = isCurrent ? 3 : 2;
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "32px system-ui, sans-serif";
+  ctx.fillText(emoji, cx, cy);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export type BuildBoardSceneOptions = {
   properties: Property[];
   developmentByPropertyId?: Record<number, number>;
@@ -87,10 +117,14 @@ export type BuildBoardSceneOptions = {
   labelMeshesRef?: { current: THREE.Mesh[] };
   /** Optional: tile meshes for raycasting (userData.propertyId set) */
   tileMeshesRef?: { current: THREE.Mesh[] };
+  /** Optional: players and positions to draw token sprites on the board */
+  players?: BoardScenePlayer[];
+  animatedPositions?: Record<number, number>;
+  currentPlayerId?: number | null;
 };
 
 export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
-  const { properties, developmentByPropertyId = {}, labelMeshesRef, tileMeshesRef } = options;
+  const { properties, developmentByPropertyId = {}, labelMeshesRef, tileMeshesRef, players = [], animatedPositions = {}, currentPlayerId = null } = options;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x010f10);
 
@@ -280,6 +314,38 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
         }
       }
     }
+  }
+
+  // Player tokens: sprites with emoji at each player's position
+  if (players.length > 0 && Object.keys(animatedPositions).length > 0) {
+    const positionCounts: Record<number, number> = {};
+    const positionIndex: Record<number, number> = {};
+    players.forEach((p) => {
+      const pos = animatedPositions[p.user_id] ?? (p.position ?? 0);
+      positionCounts[pos] = (positionCounts[pos] ?? 0) + 1;
+    });
+    const TOKEN_SIZE = 0.45;
+    const TOKEN_Y = 0.02;
+    players.forEach((player) => {
+      const pos = animatedPositions[player.user_id] ?? (player.position ?? 0);
+      const totalOnSquare = positionCounts[pos] ?? 1;
+      const idxOnSquare = positionIndex[pos] ?? 0;
+      positionIndex[pos] = idxOnSquare + 1;
+      const [x, , z] = getPosition3D(pos);
+      const [ox] = getTokenOffset(idxOnSquare, totalOnSquare);
+      const emoji = getPlayerSymbol(player.symbol) ?? "🎲";
+      const isCurrent = currentPlayerId != null && player.user_id === currentPlayerId;
+      const tex = makeEmojiTexture(emoji, isCurrent);
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.set(x + ox, TOKEN_Y, z);
+      sprite.scale.set(TOKEN_SIZE, TOKEN_SIZE, 1);
+      scene.add(sprite);
+    });
   }
 
   return scene;

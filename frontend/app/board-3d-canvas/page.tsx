@@ -85,6 +85,9 @@ export default function Board3DCanvasPage() {
       developmentByPropertyId: state.developmentByPropertyId ?? {},
       labelMeshesRef,
       tileMeshesRef,
+      players: (state.players ?? []) as { user_id: number; position?: number; symbol?: string }[],
+      animatedPositions: state.animatedPositions ?? {},
+      currentPlayerId: state.currentPlayerId ?? null,
     });
     sceneRef.current = scene;
 
