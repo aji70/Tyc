@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useQuery } from "@tanstack/react-query";
 import { ApiResponse } from "@/types/api";
 import { Game, GameProperty, Player, Property } from "@/types/game";
@@ -12,7 +12,7 @@ import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { useMediaQuery } from "@/components/useMediaQuery";
 import AiBoard from "@/components/game/ai-board/ai-board";
 import GamePlayers from "@/components/game/ai-player/ai-player";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 
@@ -31,7 +31,7 @@ export default function AiPlay3DPage() {
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
   const isGuest = !!guestUser;
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address);
+  const { isRegisteredOnChain: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegisteredOnChain(address ?? undefined);
 
   useEffect(() => {
     const code = searchParams.get("gameCode") || localStorage.getItem("gameCode");
@@ -71,7 +71,7 @@ export default function AiPlay3DPage() {
       if (!res.data?.success) throw new Error((res.data as { error?: string })?.error ?? "Game not found");
       return res.data.data;
     },
-    enabled: !!gameCode && (isUserRegistered === true || isGuest),
+    enabled: !!gameCode && (!!isUserRegistered || isGuest),
     refetchInterval: 5000,
   });
 

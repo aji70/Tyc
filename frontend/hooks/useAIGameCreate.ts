@@ -10,15 +10,11 @@ import { generateGameCode } from "@/lib/utils/games";
 import { GamePieces } from "@/lib/constants/games";
 import { apiClient } from "@/lib/api";
 import { useMediaQuery } from "@/components/useMediaQuery";
-import {
-  useIsRegistered,
-  useGetUsername,
-  useCreateAIGame,
-  useRegisteredAIAgents,
-} from "@/context/ContractProvider";
+import { useAllDojoReads, useIsRegisteredOnChain, useDojoUsername } from "@/hooks/useAllDojoReads";
+import { useDojoGameActions } from "@/hooks/dojo/useDojoGameActions";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
-import { TYCOON_CONTRACT_ADDRESSES, MINIPAY_CHAIN_IDS } from "@/constants/contracts";
-import type { Address } from "viem";
+import { MINIPAY_CHAIN_IDS } from "@/constants/contracts";
+import { usernameToFelt, codeToFelt, gameTypeToDojo, symbolToDojo } from "@/lib/dojo/calldata";
 
 export const AI_ADDRESSES = [
   "0xA1FF1c93600c3487FABBdAF21B1A360630f8bac6",
@@ -67,9 +63,12 @@ export interface UseAIGameCreateOptions {
   redirectTo3D?: boolean;
 }
 
+const POLL_GAME_ID_ATTEMPTS = 10;
+const POLL_GAME_ID_MS = 1500;
+
 export function useAIGameCreate(options?: UseAIGameCreateOptions) {
   const router = useRouter();
-  const { address } = useAccount();
+  const { account, address } = useAccount();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const redirectTo3D = options?.redirectTo3D ?? false;
   const { chain } = useNetwork();
@@ -77,28 +76,24 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
   const guestAuth = useGuestAuthOptional();
   const isGuest = !!guestAuth?.guestUser;
 
-  const { data: username } = useGetUsername(address as `0x${string}` | undefined);
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address as `0x${string}` | undefined);
-  const { agents: registeredAgents, isLoading: agentsLoading, isSupported: registrySupported } =
-    useRegisteredAIAgents();
+  const { username } = useDojoUsername(address ?? undefined);
+  const { isRegisteredOnChain: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegisteredOnChain(address ?? undefined);
+  const { createAiGame: dojoCreateAiGame } = useDojoGameActions();
+  const { getGameByCode } = useAllDojoReads();
 
-  const isMiniPay = false; // Starknet: no MiniPay chain
+  const registeredAgents: string[] = [];
+  const agentsLoading = false;
+  const registrySupported = false;
+
+  const isMiniPay = false;
   const chainName = chain?.name?.toLowerCase().replace(" ", "") || "starknet";
 
   const [settings, setSettings] = useState<AIGameSettings>(DEFAULT_SETTINGS);
+  const [isCreatePending, setIsCreatePending] = useState(false);
 
   const gameCode = generateGameCode();
   const totalPlayers = settings.aiCount + 1;
-  const contractAddress = undefined; // Starknet: use Dojo world; EVM addresses not used
-
-  const { write: createAiGame, isPending: isCreatePending } = useCreateAIGame(
-    username || "",
-    "PRIVATE",
-    settings.symbol,
-    settings.aiCount,
-    gameCode,
-    BigInt(settings.startingCash)
-  );
+  const contractAddress = undefined;
 
   const handlePlay = async () => {
     const toastId = toast.loading(
@@ -164,22 +159,45 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
       return;
     }
 
-    if (!contractAddress) {
-      toast.error("Game contract not deployed on this network.");
+    if (!account) {
+      toast.error("Wallet not ready for transactions.");
       return;
     }
 
+    setIsCreatePending(true);
     try {
-      toast.update(toastId, { render: "Creating AI game on-chain..." });
-      const onChainGameId = await createAiGame();
-      if (!onChainGameId) throw new Error("Failed to create game on-chain");
+      toast.update(toastId, { render: "Creating AI game on-chain (Dojo)..." });
+
+      await dojoCreateAiGame(
+        account,
+        usernameToFelt(username),
+        gameTypeToDojo("PRIVATE"),
+        symbolToDojo(settings.symbol),
+        settings.aiCount,
+        codeToFelt(gameCode),
+        BigInt(settings.startingCash)
+      );
+
+      let onChainGameId: bigint | null = null;
+      for (let i = 0; i < POLL_GAME_ID_ATTEMPTS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_GAME_ID_MS));
+        const raw = await getGameByCode(gameCode);
+        const arr = Array.isArray(raw) ? raw : [raw];
+        const id = arr[0] != null ? BigInt(String(arr[0])) : BigInt(0);
+        if (id !== BigInt(0)) {
+          onChainGameId = id;
+          break;
+        }
+      }
+
+      if (!onChainGameId) throw new Error("Game created but could not read game ID. Try refreshing.");
 
       toast.update(toastId, { render: "Saving game to server..." });
 
       let dbGameId: string | number | undefined;
       try {
         const saveRes: GameCreateResponse = await apiClient.post("/games", {
-          id: onChainGameId,
+          id: onChainGameId.toString(),
           code: gameCode,
           mode: "PRIVATE",
           address,
@@ -252,6 +270,8 @@ export function useAIGameCreate(options?: UseAIGameCreateOptions) {
         isLoading: false,
         autoClose: 8000,
       });
+    } finally {
+      setIsCreatePending(false);
     }
   };
 

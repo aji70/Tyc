@@ -4,8 +4,8 @@ import { useMediaQuery } from "@/components/useMediaQuery";
 import PlayWithAI3D from "@/components/settings/game-ai-3d";
 import PlayWithAI3DMobile from "@/components/settings/game-ai-3d-mobile";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /** New page: AI game settings that redirect to 3D board. Does not edit production play-ai or rewards. */
@@ -15,9 +15,9 @@ export default function PlayAI3DPage() {
   const { address } = useAccount();
 
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   if (isRegisteredLoading) {
     return (
@@ -28,7 +28,7 @@ export default function PlayAI3DPage() {
     );
   }
 
-  if (isUserRegistered === false) {
+  if (!isRegisteredLoading && isUserRegistered === false) {
     return (
       <div className="w-full min-h-screen bg-gradient-to-br from-[#0E282A] via-slate-900 to-slate-950 flex flex-col items-center justify-center gap-8 px-8 text-center">
         <AlertCircle className="w-20 h-20 text-cyan-400/80" />

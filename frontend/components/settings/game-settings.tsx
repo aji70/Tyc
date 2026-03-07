@@ -16,24 +16,19 @@ import { RiAuctionFill } from "react-icons/ri";
 import { GiBank, GiPrisoner } from "react-icons/gi";
 import { IoBuild } from "react-icons/io5";
 import { useRouter } from "next/navigation";
-import { useReadContract } from 'wagmi';
-import { useAccount as useStarknetAccount, useNetwork } from '@starknet-react/core';
+import { useAccount, useNetwork } from "@starknet-react/core";
 import { toast } from "react-toastify";
 import { generateGameCode } from "@/lib/utils/games";
 import { GamePieces } from "@/lib/constants/games";
 import { apiClient } from "@/lib/api";
-import Erc20Abi from '@/context/abi/ERC20abi.json';
-import {
-  useIsRegistered,
-  useGetUsername,
-  useCreateGame,
-  useApprove,
-} from "@/context/ContractProvider";
+import { useAllDojoReads, useIsRegisteredOnChain, useDojoUsername } from "@/hooks/useAllDojoReads";
+import { useDojoGameActions } from "@/hooks/dojo/useDojoGameActions";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
-import { TYCOON_CONTRACT_ADDRESSES, USDC_TOKEN_ADDRESS, MINIPAY_CHAIN_IDS } from "@/constants/contracts";
-import { Address, parseUnits } from "viem";
+import { MINIPAY_CHAIN_IDS } from "@/constants/contracts";
+import { Address } from "viem";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
+import { usernameToFelt, codeToFelt, gameTypeToDojo, symbolToDojo } from "@/lib/dojo/calldata";
 
 interface GameCreateResponse {
   data?: {
@@ -43,7 +38,6 @@ interface GameCreateResponse {
   id?: string | number;
 }
 
-const USDC_DECIMALS = 6;
 const stakePresets = [1, 5, 10, 25, 50, 100];
 
 interface GameSettingsProps {
@@ -51,16 +45,22 @@ interface GameSettingsProps {
   redirectToWaitingRoom?: string;
 }
 
+const POLL_GAME_ID_ATTEMPTS = 10;
+const POLL_GAME_ID_MS = 1500;
+
 export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }: GameSettingsProps = {}) {
   const router = useRouter();
-  const { address } = useStarknetAccount();
+  const { account, address } = useAccount();
   const { chain } = useNetwork();
   const guestAuth = useGuestAuthOptional();
   const isGuest = !!guestAuth?.guestUser;
 
-  const { data: username } = useGetUsername(address as `0x${string}` | undefined);
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address as `0x${string}` | undefined);
+  const { username } = useDojoUsername(address ?? undefined);
+  const { isRegisteredOnChain: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegisteredOnChain(address ?? undefined);
+  const { createGame: dojoCreateGame } = useDojoGameActions();
+  const { getGameByCode } = useAllDojoReads();
 
+  const [isCreatePending, setIsCreatePending] = useState(false);
   const isMiniPay = false;
   const chainName = chain?.name?.toLowerCase().replace(" ", "") || "starknet";
 
@@ -82,39 +82,18 @@ export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }
   const [customStake, setCustomStake] = useState<string>("");
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Starknet: EVM contract addresses not used; use Dojo for game creation
   const contractAddress = undefined as Address | undefined;
   const usdcTokenAddress = undefined as Address | undefined;
-
-  const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
-    address: usdcTokenAddress,
-    abi: Erc20Abi,
-    functionName: 'allowance',
-    args: address && contractAddress ? [address, contractAddress] : undefined,
-    query: { enabled: !!address && !!usdcTokenAddress && !!contractAddress },
-  });
+  const usdcAllowance: bigint | undefined = undefined;
+  const refetchAllowance = () => {};
+  const approvePending = false;
+  const approveConfirming = false;
 
   const gameCode = generateGameCode();
   const gameType = settings.privateRoom ? "PRIVATE" : "PUBLIC";
 
-  const {
-    approve: approveUSDC,
-    isPending: approvePending,
-    isConfirming: approveConfirming,
-  } = useApprove();
-
   const finalStake = isFreeGame ? 0 : settings.stake;
-  const stakeAmount = parseUnits(finalStake.toString(), USDC_DECIMALS);
-
-  const { write: createGame, isPending: isCreatePending } = useCreateGame(
-    username || "",
-    gameType,
-    settings.symbol,
-    settings.maxPlayers,
-    gameCode,
-    BigInt(settings.startingCash),
-    stakeAmount
-  );
+  const stakeAmount = BigInt(finalStake);
 
   const playGuard = usePreventDoubleSubmit();
 
@@ -181,35 +160,42 @@ export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }
       return;
     }
 
-    if (!contractAddress) {
-      toast.error("Contract not deployed on this network.");
-      return;
-    }
-
-    if (!usdcTokenAddress && !isFreeGame) {
-      toast.error("USDC not available on this network.");
+    if (!account) {
+      toast.error("Wallet not ready for transactions.");
       return;
     }
 
     const toastId = toast.loading("Creating your game room...");
+    setIsCreatePending(true);
+    setCreateError(null);
 
     try {
-      if (!isFreeGame) {
-        let needsApproval = false;
-        await refetchAllowance();
-        const currentAllowance = usdcAllowance ? BigInt(usdcAllowance.toString()) : BigInt(0);
-        if (currentAllowance < stakeAmount) needsApproval = true;
+      toast.update(toastId, { render: "Creating game on-chain (Dojo)..." });
 
-        if (needsApproval) {
-          toast.update(toastId, { render: "Approving USDC spend..." });
-          await approveUSDC(usdcTokenAddress!, contractAddress, stakeAmount);
-          await new Promise(r => setTimeout(r, 3000));
+      await dojoCreateGame(
+        account,
+        usernameToFelt(username),
+        gameTypeToDojo(gameType),
+        symbolToDojo(settings.symbol),
+        settings.maxPlayers,
+        codeToFelt(gameCode),
+        BigInt(settings.startingCash),
+        stakeAmount
+      );
+
+      let onChainGameId: bigint | null = null;
+      for (let i = 0; i < POLL_GAME_ID_ATTEMPTS; i++) {
+        await new Promise((r) => setTimeout(r, POLL_GAME_ID_MS));
+        const raw = await getGameByCode(gameCode);
+        const arr = Array.isArray(raw) ? raw : [raw];
+        const id = arr[0] != null ? BigInt(String(arr[0])) : BigInt(0);
+        if (id !== BigInt(0)) {
+          onChainGameId = id;
+          break;
         }
       }
 
-      toast.update(toastId, { render: "Creating game on-chain..." });
-      const onChainGameId = await createGame();
-      if (!onChainGameId) throw new Error("Failed to create game on-chain");
+      if (!onChainGameId) throw new Error("Game created but could not read game ID. Try refreshing.");
 
       toast.update(toastId, { render: "Saving game to server..." });
 
@@ -228,7 +214,7 @@ export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }
           is_minipay: isMiniPay,
           chain: chainName,
           duration: settings.duration,
-          use_usdc: !isFreeGame,
+          use_usdc: false,
           settings: {
             auction: settings.auction,
             rent_in_prison: settings.rentInPrison,
@@ -264,6 +250,8 @@ export default function GameSettings({ redirectToWaitingRoom = "/game-waiting" }
         isLoading: false,
         autoClose: 8000,
       });
+    } finally {
+      setIsCreatePending(false);
     }
   };
 

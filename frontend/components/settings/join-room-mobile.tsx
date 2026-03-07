@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IoHomeOutline, IoArrowForwardOutline } from "react-icons/io5";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { apiClient } from "@/lib/api";
 import { ApiResponse } from "@/types/api";

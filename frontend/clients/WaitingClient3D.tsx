@@ -3,8 +3,8 @@
 import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 function isTournamentMatchCode(code: string | null): boolean {
@@ -66,7 +66,7 @@ export default function GameWaitingClient3D() {
   const searchParams = useSearchParams();
   const gameCode = searchParams.get("gameCode") ?? "";
 
-  const { data: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegistered(address);
+  const { isRegisteredOnChain: isUserRegistered, isLoading: isRegisteredLoading } = useIsRegisteredOnChain(address ?? undefined);
   const isTournamentLobby = isTournamentMatchCode(gameCode);
 
   if (!isTournamentLobby) {

@@ -195,3 +195,37 @@ export function useIsRegisteredOnChain(address: string | undefined) {
 
   return { isRegisteredOnChain, isLoading, error };
 }
+
+/**
+ * Reactive hook for on-chain username (Dojo). Use in game-settings etc.
+ */
+export function useDojoUsername(address: string | undefined) {
+  const { getUsername } = useAllDojoReads();
+  const [username, setUsername] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!address?.trim()) {
+      setUsername(null);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    getUsername(address)
+      .then((name) => {
+        if (!cancelled) setUsername(name ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setUsername(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, getUsername]);
+
+  return { username, isLoading };
+}

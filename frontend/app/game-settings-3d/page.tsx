@@ -4,8 +4,8 @@ import { useMediaQuery } from "@/components/useMediaQuery";
 import GameSettings from "@/components/settings/game-settings";
 import GameSettingsMobile from "@/components/settings/game-settings-mobile";
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /**
@@ -17,9 +17,9 @@ export default function GameSettings3DPage() {
   const { address } = useAccount();
 
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   if (isRegisteredLoading) {
     return (
@@ -30,7 +30,7 @@ export default function GameSettings3DPage() {
     );
   }
 
-  if (isUserRegistered === false) {
+  if (!isRegisteredLoading && isUserRegistered === false) {
     return (
       <div className="w-full h-screen bg-[#010F10] flex flex-col items-center justify-center gap-8 px-8 text-center">
         <AlertCircle className="w-20 h-20 text-red-400" />

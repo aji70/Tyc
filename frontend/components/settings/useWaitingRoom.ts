@@ -2,20 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount, useChainId, useReadContract, usePublicClient } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { Address } from "viem";
-import {
-  useGetUsername,
-  useJoinGame,
-  useGetGameByCode,
-  useApprove,
-} from "@/context/ContractProvider";
+import { useAllDojoReads, useDojoUsername } from "@/hooks/useAllDojoReads";
+import { useDojoGameActions } from "@/hooks/dojo/useDojoGameActions";
+import { usernameToFelt, codeToFelt, symbolToDojo } from "@/lib/dojo/calldata";
 import { apiClient } from "@/lib/api";
 import { Game } from "@/lib/types/games";
 import { getPlayerSymbolData, PlayerSymbol, symbols } from "@/lib/types/symbol";
 import { ApiResponse } from "@/types/api";
-import Erc20Abi from "@/context/abi/ERC20abi.json";
-import { TYCOON_CONTRACT_ADDRESSES, USDC_TOKEN_ADDRESS } from "@/constants/contracts";
 import { toast } from "react-toastify";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
@@ -59,10 +54,11 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
   const rawGameCode = searchParams.get("gameCode") ?? "";
   const gameCode = rawGameCode.trim().toUpperCase();
 
-  const { address } = useAccount();
-  const chainId = useChainId();
+  const { account, address } = useAccount();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
+  const { getGameByCode } = useAllDojoReads();
+  const { joinGame: dojoJoinGame } = useDojoGameActions();
 
   const [game, setGame] = useState<Game | null>(null);
   const [playerSymbol, setPlayerSymbol] = useState<PlayerSymbol | null>(null);
@@ -79,46 +75,78 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
   const gameHasContract = !!(game && (game as Game & { contract_game_id?: string | null }).contract_game_id);
   const enableContractRead = !!gameCode && (!tournamentLobby || gameHasContract);
 
-  const {
-    data: contractGame,
-    isLoading: contractGameLoading,
-    error: contractGameErrorRaw,
-  } = useGetGameByCode(gameCode, { enabled: enableContractRead });
+  const [dojoGame, setDojoGame] = useState<{
+    id: bigint;
+    creator?: string;
+    joinedPlayers?: number;
+    numberOfPlayers?: number;
+    stakePerPlayer?: bigint;
+  } | null>(null);
+  const [contractGameLoading, setContractGameLoading] = useState(false);
+  const [contractGameErrorRaw, setContractGameErrorRaw] = useState<unknown>(null);
 
-  // Filter out "Not found" errors - these are expected when game doesn't exist on-chain yet
+  useEffect(() => {
+    if (!enableContractRead || !gameCode) {
+      setDojoGame(null);
+      return;
+    }
+    let cancelled = false;
+    setContractGameLoading(true);
+    setContractGameErrorRaw(null);
+    getGameByCode(gameCode)
+      .then((raw: unknown) => {
+        if (cancelled) return;
+        const arr = Array.isArray(raw) ? raw : [raw];
+        const gameId = arr[0] != null ? BigInt(String(arr[0])) : BigInt(0);
+        if (gameId === BigInt(0)) {
+          setDojoGame(null);
+          return;
+        }
+        setDojoGame({
+          id: gameId,
+          joinedPlayers: arr[3] != null ? Number(arr[3]) : undefined,
+          numberOfPlayers: arr[2] != null ? Number(arr[2]) : undefined,
+          stakePerPlayer: arr[8] != null ? BigInt(String(arr[8])) : undefined,
+          creator: arr[1] != null ? String(arr[1]) : undefined,
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) setContractGameErrorRaw(err);
+      })
+      .finally(() => {
+        if (!cancelled) setContractGameLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameCode, enableContractRead, getGameByCode]);
+
+  const contractGame = dojoGame
+    ? {
+        id: dojoGame.id,
+        creator: dojoGame.creator,
+        joinedPlayers: dojoGame.joinedPlayers,
+        numberOfPlayers: dojoGame.numberOfPlayers,
+        stakePerPlayer: dojoGame.stakePerPlayer,
+      }
+    : undefined;
+
   const contractGameError = useMemo(() => {
     if (!contractGameErrorRaw) return null;
-    const errorMessage = contractGameErrorRaw?.message || String(contractGameErrorRaw);
-    if (errorMessage.includes("Not found") || errorMessage.includes("not found")) {
-      return null; // Don't show "Not found" errors - game might not be on-chain yet
-    }
+    const errorMessage = (contractGameErrorRaw as Error)?.message || String(contractGameErrorRaw);
+    if (errorMessage.includes("Not found") || errorMessage.includes("not found")) return null;
     return contractGameErrorRaw;
   }, [contractGameErrorRaw]);
 
   const contractId = contractGame?.id ?? null;
-  const { data: username } = useGetUsername(address);
-  const publicClient = usePublicClient();
+  const { username } = useDojoUsername(address ?? undefined);
 
-  const contractAddress = TYCOON_CONTRACT_ADDRESSES[
-    chainId as keyof typeof TYCOON_CONTRACT_ADDRESSES
-  ] as Address | undefined;
-  const usdcTokenAddress = USDC_TOKEN_ADDRESS[
-    chainId as keyof typeof USDC_TOKEN_ADDRESS
-  ] as Address | undefined;
-
-  const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
-    address: usdcTokenAddress,
-    abi: Erc20Abi,
-    functionName: "allowance",
-    args: address && contractAddress ? [address, contractAddress] : undefined,
-    query: { enabled: !!address && !!usdcTokenAddress && !!contractAddress },
-  });
-
-  const {
-    approve: approveUSDC,
-    isPending: approvePending,
-    isConfirming: approveConfirming,
-  } = useApprove();
+  const contractAddress = undefined as Address | undefined;
+  const usdcTokenAddress = undefined as Address | undefined;
+  const usdcAllowance = undefined;
+  const refetchAllowance = () => {};
+  const approvePending = false;
+  const approveConfirming = false;
 
   const stakePerPlayer = contractGame?.stakePerPlayer
     ? BigInt(contractGame.stakePerPlayer)
@@ -126,17 +154,10 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
 
   const guestCannotJoinStaked = !!guestUser && stakePerPlayer > BigInt(0);
 
-  const {
-    write: joinGame,
-    isPending: isJoining,
-    error: joinError,
-  } = useJoinGame(
-    contractId ? BigInt(contractId) : BigInt(0),
-    username ?? "",
-    playerSymbol?.value ?? "",
-    gameCode,
-    stakePerPlayer
-  );
+  const [joinError, setJoinError] = useState<unknown>(null);
+  const isJoining = actionLoading;
+  const approveUSDC = useCallback(async () => {}, []);
+  const joinGame = useCallback(async () => undefined as string | undefined, []);
 
   const mountedRef = useRef(true);
   const refetchGameRef = useRef<{ fn: (() => Promise<void>) | null }>({ fn: null });
@@ -468,8 +489,8 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
       return;
     }
 
-    if (!contractAddress) {
-      setError("Contract not deployed on this network.");
+    if (!account) {
+      setError("Wallet not ready for transactions.");
       actionGuardRef.current = false;
       setActionLoading(false);
       toast.dismiss(toastId);
@@ -488,36 +509,17 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
       return;
     }
 
-    if (!usdcTokenAddress && stakePerPlayer > 0) {
-      setError("USDC not available on this network.");
-      actionGuardRef.current = false;
-      setActionLoading(false);
-      toast.dismiss(toastId);
-      return;
-    }
-
     try {
-      if (stakePerPlayer > 0) {
-        toast.update(toastId, { render: "Checking USDC approval..." });
-        await refetchAllowance();
-        const currentAllowance = usdcAllowance
-          ? BigInt(usdcAllowance.toString())
-          : BigInt(0);
+      setJoinError(null);
+      toast.update(toastId, { render: "Joining game on-chain (Dojo)..." });
 
-        if (currentAllowance < stakePerPlayer) {
-          toast.update(toastId, { render: "Approving USDC spend..." });
-          await approveUSDC(usdcTokenAddress!, contractAddress, stakePerPlayer);
-          await new Promise((r) => setTimeout(r, 3000));
-        }
-      }
-
-      toast.update(toastId, { render: "Joining game on-chain (sign in wallet)..." });
-      const hash = await joinGame();
-
-      if (hash && publicClient) {
-        toast.update(toastId, { render: "Waiting for confirmation..." });
-        await publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-      }
+      await dojoJoinGame(
+        account,
+        BigInt(contractId),
+        usernameToFelt(username ?? ""),
+        symbolToDojo(playerSymbol.value),
+        codeToFelt(gameCode)
+      );
 
       toast.update(toastId, { render: "Saving join to server..." });
       const res = await apiClient.post<ApiResponse>("/game-players/join", {
@@ -543,6 +545,7 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
       });
     } catch (err: unknown) {
       console.error("join error", err);
+      if (mountedRef.current) setJoinError(err);
       const message = getContractErrorMessage(err, "Failed to join game. Please try again.");
       setError(message);
       toast.update(toastId, {
@@ -562,16 +565,11 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
     playerSymbol,
     availableSymbols,
     address,
+    account,
     guestUser,
-    joinGame,
+    dojoJoinGame,
     stakePerPlayer,
     contractId,
-    contractAddress,
-    usdcTokenAddress,
-    refetchAllowance,
-    usdcAllowance,
-    approveUSDC,
-    publicClient,
     tournamentLobby,
   ]);
 
