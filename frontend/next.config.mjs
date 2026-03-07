@@ -29,16 +29,18 @@ const nextConfig = {
       isServer && !dev ? '../static/wasm/[modulehash].wasm' : 'static/wasm/[modulehash].wasm';
     // Force a single React instance to avoid "ReactCurrentBatchConfig" / multiple-React errors (Cartridge/Dojo/ R3F)
     config.resolve = config.resolve ?? {};
+    const reactPath = path.resolve(__dirname, 'node_modules/react');
     config.resolve.alias = {
       ...config.resolve.alias,
-      // Server: use shim that adds React.cache (Next 15 + R3F expect it; React 18 doesn't export it)
       ...(isServer
         ? {
+            'react/jsx-runtime': path.join(reactPath, 'jsx-runtime.js'),
+            'react/jsx-dev-runtime': path.join(reactPath, 'jsx-dev-runtime.js'),
             react: path.resolve(__dirname, 'lib/react-server-shim.js'),
             'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
           }
         : {
-            react: path.resolve(__dirname, 'node_modules/react'),
+            react: reactPath,
             'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
           }),
     };
