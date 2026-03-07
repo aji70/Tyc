@@ -80,7 +80,7 @@ const nextConfig = {
 const hasSentryAuth = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 export default withSentryConfig(nextConfig, {
-  silent: !process.env.CI,
+  silent: !hasSentryAuth || !process.env.CI,
   org: process.env.SENTRY_ORG ?? undefined,
   project: process.env.SENTRY_PROJECT ?? undefined,
   authToken: hasSentryAuth ? process.env.SENTRY_AUTH_TOKEN : undefined,
