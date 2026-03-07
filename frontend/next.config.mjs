@@ -18,15 +18,6 @@ const nextConfig = {
   transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   // Dojo SDK uses @dojoengine/torii-wasm (.wasm). Requires Next 15+ (webpack 5.97+) for WASM reference types.
   webpack(config, { isServer, dev }) {
-    // Force a single React only for client (fixes ReactCurrentBatchConfig in R3F async chunk).
-    // Do not alias on server so Next.js RSC still gets React.cache.
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        react: path.join(__dirname, 'node_modules/react'),
-        'react-dom': path.join(__dirname, 'node_modules/react-dom'),
-      };
-    }
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.output.webassemblyModuleFilename =
       isServer && !dev ? '../static/wasm/[modulehash].wasm' : 'static/wasm/[modulehash].wasm';
