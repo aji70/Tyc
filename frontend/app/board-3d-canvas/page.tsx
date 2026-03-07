@@ -10,7 +10,6 @@ import {
   type Board3DMessageFromCanvas,
 } from "@/lib/board3d-iframe-messages";
 import { buildBoardScene } from "@/lib/board3d-vanilla-scene";
-import { getPosition3D } from "@/components/game/board3d/positions";
 import { getSquareName } from "@/components/game/board3d/squareNames";
 import ActionLog from "@/components/game/ai-board/action-log";
 
@@ -22,6 +21,7 @@ const CAMERA_LOOK_AT: [number, number, number] = [0, 0, 0];
 let cachedBoardTexture: THREE.Texture | null = null;
 
 const DICE_ROLL_MS = 1400;
+const DICE_SHOW_RESULT_MS = 1500; // show settled dice (die1 + die2 = total) before player moves
 const DICE_SIZE = 0.6;
 /** Rotations so face 1..6 shows on top (x, y, z in radians). */
 const DICE_TOP_ROTATIONS: [number, number, number][] = [
@@ -54,6 +54,8 @@ export default function Board3DCanvasPage() {
   const diceGroupRef = useRef<THREE.Group | null>(null);
   const diceStartTimeRef = useRef<number>(0);
   const diceCompleteRef = useRef<boolean>(false);
+  const diceSettledTimeRef = useRef<number>(0);
+  const diceCompleteCalledRef = useRef<boolean>(false);
 
   useEffect(() => {
     postToParent({ type: "BOARD_3D_READY" });
@@ -99,6 +101,7 @@ export default function Board3DCanvasPage() {
 
     diceGroupRef.current = null;
     diceCompleteRef.current = false;
+    diceCompleteCalledRef.current = false;
     labelMeshesRef.current = [];
     tileMeshesRef.current = [];
     const scene = buildBoardScene({
@@ -224,16 +227,7 @@ export default function Board3DCanvasPage() {
       () => renderer.dispose(),
     ];
 
-    const focusTile = state.focusTilePosition ?? null;
-    if (focusTile != null && typeof focusTile === "number") {
-      const [x, , z] = getPosition3D(focusTile);
-      controls.target.set(x, 0, z);
-      if (state.isLiveGame) {
-        const focusTimeout = window.setTimeout(() => onFocusComplete(), 800);
-        cleanupFns.push(() => window.clearTimeout(focusTimeout));
-      }
-    }
-
+    // No zoom or camera reaction when player moves — keep target at board center
     const rolling = state.rollingDice;
     if (rolling && typeof rolling.die1 === "number" && typeof rolling.die2 === "number") {
       const diceGroup = new THREE.Group();
@@ -261,21 +255,26 @@ export default function Board3DCanvasPage() {
       frameRef.current = requestAnimationFrame(animate);
       controls.update();
       const diceGroup = diceGroupRef.current;
-      if (diceGroup && diceGroup.parent && !diceCompleteRef.current && diceGroup.children.length >= 2) {
+      if (diceGroup && diceGroup.parent && diceGroup.children.length >= 2) {
         const elapsed = Date.now() - diceStartTimeRef.current;
         const die1 = diceGroup.children[0];
         const die2 = diceGroup.children[1];
         const r1 = DICE_TOP_ROTATIONS[Math.max(0, Math.min(5, (state?.rollingDice?.die1 ?? 1) - 1))];
         const r2 = DICE_TOP_ROTATIONS[Math.max(0, Math.min(5, (state?.rollingDice?.die2 ?? 1) - 1))];
-        const spin = (elapsed / DICE_ROLL_MS) * Math.PI * 10;
-        if (elapsed >= DICE_ROLL_MS) {
-          diceCompleteRef.current = true;
-          die1.rotation.set(r1[0], r1[1], r1[2]);
-          die2.rotation.set(r2[0], r2[1], r2[2]);
+        if (!diceCompleteRef.current) {
+          const spin = (elapsed / DICE_ROLL_MS) * Math.PI * 10;
+          if (elapsed >= DICE_ROLL_MS) {
+            diceCompleteRef.current = true;
+            diceSettledTimeRef.current = Date.now();
+            die1.rotation.set(r1[0], r1[1], r1[2]);
+            die2.rotation.set(r2[0], r2[1], r2[2]);
+          } else {
+            die1.rotation.set(r1[0] + spin * 0.7, r1[1] + spin * 1.2, r1[2] + spin * 0.6);
+            die2.rotation.set(r2[0] + spin * 0.9, r2[1] + spin * 0.5, r2[2] + spin * 1.1);
+          }
+        } else if (!diceCompleteCalledRef.current && Date.now() - diceSettledTimeRef.current >= DICE_SHOW_RESULT_MS) {
+          diceCompleteCalledRef.current = true;
           onDiceComplete();
-        } else {
-          die1.rotation.set(r1[0] + spin * 0.7, r1[1] + spin * 1.2, r1[2] + spin * 0.6);
-          die2.rotation.set(r2[0] + spin * 0.9, r2[1] + spin * 0.5, r2[2] + spin * 1.1);
         }
       }
       renderer.render(scene, camera);
@@ -372,18 +371,6 @@ export default function Board3DCanvasPage() {
             >
               Roll
             </button>
-          )}
-          {rollingDice && (
-            <div className="flex items-center gap-3">
-              <span className="text-cyan-200 text-sm font-medium">Rolling…</span>
-              <button
-                type="button"
-                onClick={onDiceComplete}
-                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
-              >
-                Done
-              </button>
-            </div>
           )}
         </div>
       </div>
