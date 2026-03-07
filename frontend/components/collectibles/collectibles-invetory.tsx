@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, useChainId, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt, useBalance } from "wagmi";
-import { formatUnits, type Address, type Abi, erc20Abi } from "viem";
+import { useAccount, useNetwork } from "@starknet-react/core";
+import { formatUnits, type Address } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
 import toast from "react-hot-toast";
 import Image from "next/image";
@@ -13,10 +13,9 @@ import {
 import EmptyState from "@/components/ui/EmptyState";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 
-import RewardABI from "@/context/abi/rewardabi.json";
-import { REWARD_CONTRACT_ADDRESSES, TYC_TOKEN_ADDRESS, USDC_TOKEN_ADDRESS } from "@/constants/contracts";
+import { REWARD_CONTRACT_ADDRESSES } from "@/constants/contracts";
 import { Game, GameProperty } from "@/types/game";
-import { useRewardBurnCollectible } from "@/context/ContractProvider";
+import { useDojoRewardBurnCollectible, useDojoRewardBuyCollectible } from "@/hooks/dojo";
 import { apiClient } from "@/lib/api";
 import { ApiResponse } from "@/types/api";
 
@@ -79,11 +78,9 @@ export default function CollectibleInventoryBar({
   triggerSpecialLanding,
 }: CollectibleInventoryBarProps) {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
   const contractAddress = REWARD_CONTRACT_ADDRESSES[chainId as keyof typeof REWARD_CONTRACT_ADDRESSES] as Address | undefined;
-
-  const tycToken = TYC_TOKEN_ADDRESS[chainId as keyof typeof TYC_TOKEN_ADDRESS] as Address | undefined;
-  const usdcToken = USDC_TOKEN_ADDRESS[chainId as keyof typeof USDC_TOKEN_ADDRESS] as Address | undefined;
 
   const [showMiniShop, setShowMiniShop] = useState(false);
   const [useUsdc, setUseUsdc] = useState(true);
@@ -103,29 +100,16 @@ export default function CollectibleInventoryBar({
   const [selectedPositionIndex, setSelectedPositionIndex] = useState<number | null>(null);
   const [selectedRollTotal, setSelectedRollTotal] = useState<number | null>(null);
 
-  const selectedToken = useUsdc ? usdcToken : tycToken;
   const selectedDecimals = useUsdc ? 6 : 18;
 
-  const { writeContract: writeBuy, data: buyHash, isPending: buyingPending } = useWriteContract();
-  const { writeContract: writeApprove, data: approveHash, isPending: approving } = useWriteContract();
+  const { buy, isPending: buyingPending, isSuccess: buySuccess, reset: resetBuy } = useDojoRewardBuyCollectible();
+  const approveSuccess = false;
 
-  const { isLoading: confirmingBuy } = useWaitForTransactionReceipt({ hash: buyHash });
-  const { isLoading: confirmingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveHash });
+  const tycBal = { formatted: "0.00" };
+  const usdcBal = { formatted: "0.00" };
+  const currentAllowance = BigInt(0);
 
-  const { data: tycBal } = useBalance({ address, token: tycToken });
-  const { data: usdcBal } = useBalance({ address, token: usdcToken });
-
-  const { data: allowance } = useReadContract({
-    address: selectedToken,
-    abi: erc20Abi,
-    functionName: "allowance",
-    args: address && contractAddress ? [address, contractAddress] : undefined,
-    query: { enabled: !!address && !!contractAddress && !!selectedToken },
-  });
-
-  const currentAllowance = allowance ?? 0;
-
-  const { burn: burnCollectible, isPending: isBurning, isSuccess: burnSuccess } = useRewardBurnCollectible();
+  const { burn: burnCollectible, isPending: isBurning, isSuccess: burnSuccess } = useDojoRewardBurnCollectible();
 
   const currentPlayer = useMemo(() => {
     if (!address || !game?.players) return null;
@@ -197,44 +181,9 @@ export default function CollectibleInventoryBar({
     }
   };
 
-  // === OWNED COLLECTIBLES ===
-  const { data: ownedCountRaw } = useReadContract({
-    address: contractAddress,
-    abi: RewardABI,
-    functionName: "ownedTokenCount",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!contractAddress },
-  });
-
-  const ownedCount = Number(ownedCountRaw ?? 0);
-
-  const tokenCalls = useMemo(() => Array.from({ length: ownedCount }, (_, i) => ({
-    address: contractAddress!,
-    abi: RewardABI as Abi,
-    functionName: "tokenOfOwnerByIndex" as const,
-    args: [address!, BigInt(i)],
-  })), [contractAddress, address, ownedCount]);
-
-  const { data: tokenResults } = useReadContracts({
-    contracts: tokenCalls,
-    query: { enabled: ownedCount > 0 && !!contractAddress && !!address },
-  });
-
-  const ownedTokenIds = tokenResults
-    ?.map(r => r.status === "success" ? r.result as bigint : null)
-    .filter((id): id is bigint => id !== null && id >= COLLECTIBLE_ID_START) ?? [];
-
-  const infoCalls = useMemo(() => ownedTokenIds.map(id => ({
-    address: contractAddress!,
-    abi: RewardABI as Abi,
-    functionName: "getCollectibleInfo" as const,
-    args: [id],
-  })), [contractAddress, ownedTokenIds]);
-
-  const { data: infoResults } = useReadContracts({
-    contracts: infoCalls,
-    query: { enabled: ownedTokenIds.length > 0 },
-  });
+  // === OWNED COLLECTIBLES (Dojo: stub until useDojoOwnedPerks/balance_of equivalents) ===
+  const ownedTokenIds: bigint[] = [];
+  const infoResults: Array<{ status: "success"; result: [bigint, bigint] }> | undefined = undefined;
 
   const ownedCollectibles = useMemo(() => {
     if (!infoResults) return [];
@@ -267,44 +216,9 @@ export default function CollectibleInventoryBar({
 
   const totalOwned = ownedCollectibles.length;
 
-  // === SHOP ITEMS ===
-  const { data: shopCountRaw } = useReadContract({
-    address: contractAddress,
-    abi: RewardABI,
-    functionName: "ownedTokenCount",
-    args: contractAddress ? [contractAddress] : undefined,
-    query: { enabled: !!contractAddress },
-  });
-
-  const shopCount = Number(shopCountRaw ?? 0);
-
-  const shopTokenCalls = useMemo(() => Array.from({ length: shopCount }, (_, i) => ({
-    address: contractAddress!,
-    abi: RewardABI as Abi,
-    functionName: "tokenOfOwnerByIndex" as const,
-    args: [contractAddress!, BigInt(i)],
-  })), [contractAddress, shopCount]);
-
-  const { data: shopTokenResults } = useReadContracts({
-    contracts: shopTokenCalls,
-    query: { enabled: shopCount > 0 && !!contractAddress },
-  });
-
-  const shopTokenIds = shopTokenResults
-    ?.map(r => r.status === "success" ? r.result as bigint : null)
-    .filter((id): id is bigint => id !== null && id >= COLLECTIBLE_ID_START) ?? [];
-
-  const shopInfoCalls = useMemo(() => shopTokenIds.map(id => ({
-    address: contractAddress!,
-    abi: RewardABI as Abi,
-    functionName: "getCollectibleInfo" as const,
-    args: [id],
-  })), [contractAddress, shopTokenIds]);
-
-  const { data: shopInfoResults } = useReadContracts({
-    contracts: shopInfoCalls,
-    query: { enabled: shopTokenIds.length > 0 },
-  });
+  // === SHOP ITEMS (Dojo: stub until useDojoShopStock) ===
+  const shopTokenIds: bigint[] = [];
+  const shopInfoResults: Array<{ status: "success"; result: [bigint, bigint, bigint, bigint, bigint] }> | undefined = undefined;
 
   const shopItems = useMemo(() => {
     if (!shopInfoResults) return [];
@@ -334,54 +248,34 @@ export default function CollectibleInventoryBar({
       .filter((item): item is NonNullable<typeof item> => item !== null);
   }, [shopInfoResults, shopTokenIds]);
 
-  // === BUY & APPROVE LOGIC ===
+  // === BUY LOGIC (Dojo) ===
   const handleBuy = async (item: typeof shopItems[number]) => {
-    if (!contractAddress || !address) {
+    if (!address) {
       toast.error("Wallet not connected");
       return;
     }
-
-    const priceStr = useUsdc ? item.usdcPrice : item.tycPrice;
-    const priceBig = BigInt(Math.round(parseFloat(priceStr) * 10 ** selectedDecimals));
-
-    if (currentAllowance < priceBig) {
-      setApprovingId(item.tokenId);
-      toast.loading(`Approving ${useUsdc ? "USDC" : "TYC"}...`, { id: "approve" });
-      writeApprove({
-        address: selectedToken!,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [contractAddress, priceBig],
-      });
-      return;
-    }
-
     setBuyingId(item.tokenId);
     toast.loading("Purchasing...", { id: "buy" });
-    writeBuy({
-      address: contractAddress,
-      abi: RewardABI,
-      functionName: "buyCollectible",
-      args: [item.tokenId, useUsdc],
-    });
+    try {
+      await buy(item.tokenId, useUsdc);
+      toast.success("Purchase complete! 🎉", { id: "buy" });
+      setBuyingId(null);
+      resetBuy();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Purchase failed", { id: "buy" });
+      setBuyingId(null);
+    }
   };
 
   useEffect(() => {
-    if (approveSuccess && approvingId !== null) {
+    if (buySuccess) {
       toast.dismiss("approve");
-      toast.success("Approved! Completing purchase...");
-      const item = shopItems.find(i => i.tokenId === approvingId);
-      if (item) handleBuy(item);
-      setApprovingId(null);
-    }
-  }, [approveSuccess, approvingId, shopItems]);
-
-  useEffect(() => {
-    if (buyHash && !buyingPending && !confirmingBuy) {
-      toast.success("Purchase complete! 🎉");
+      toast.success("Purchase complete! 🎉", { id: "buy" });
       setBuyingId(null);
+      setApprovingId(null);
+      resetBuy();
     }
-  }, [buyHash, buyingPending, confirmingBuy]);
+  }, [buySuccess, resetBuy]);
 
   // === PERK ACTIVATION ===
   const handleUsePerk = (

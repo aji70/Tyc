@@ -4,7 +4,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { Game, Player, Property, GameProperty } from "@/types/game";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api";
-import { useExitGame, useGetGameByCode } from "@/context/ContractProvider";
+import { useDojoExitGame } from "@/hooks/dojo/useDojoExitGame";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
 import { ApiResponse } from "@/types/api";
 import { useGameTrades } from "@/hooks/useGameTrades";
 import { isAIPlayer, calculateAiFavorability } from "@/utils/gameUtils";
@@ -67,7 +68,7 @@ export function usePlayerSidebar({
     error: endGameError,
     txHash: endGameTxHash,
     reset: endGameReset,
-  } = useExitGame(onChainGameId ?? BigInt(0));
+  } = useDojoExitGame(onChainGameId ?? BigInt(0));
 
   const toggleEmpire = useCallback(() => setShowEmpire((p) => !p), []);
   const toggleTrade = useCallback(() => setShowTrade((p) => !p), []);

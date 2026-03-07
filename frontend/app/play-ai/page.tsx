@@ -5,8 +5,8 @@ import PlayWithAISettings from "@/components/settings/game-ai";
 import PlayWithAISettingsMobile from "@/components/settings/game-ai-mobile";
 
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export default function GameSettingsPage() {
@@ -15,9 +15,9 @@ export default function GameSettingsPage() {
   const { address } = useAccount();
 
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   // Loading state while checking registration
   if (isRegisteredLoading) {

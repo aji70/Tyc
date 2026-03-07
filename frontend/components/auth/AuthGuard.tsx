@@ -2,7 +2,7 @@
 
 import React, { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { Wallet, User } from "lucide-react";
 

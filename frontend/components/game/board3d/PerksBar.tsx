@@ -1,13 +1,8 @@
 'use client';
 
-import React, { useMemo } from "react";
-import { useAccount, useChainId, useReadContract, useReadContracts } from "wagmi";
-import type { Address, Abi } from "viem";
+import React from "react";
+import { useDojoOwnedPerks } from "@/hooks/dojo/useDojoOwnedPerks";
 import { Zap, Crown, Coins, Sparkles, Gem, Shield, Percent, CircleDollarSign, MapPin } from "lucide-react";
-import RewardABI from "@/context/abi/rewardabi.json";
-import { REWARD_CONTRACT_ADDRESSES } from "@/constants/contracts";
-
-const COLLECTIBLE_ID_START = 2_000_000_000;
 
 const PERK_ICONS: Record<number, React.ReactNode> = {
   1: <Zap className="w-4 h-4" />,
@@ -45,93 +40,14 @@ const PERK_NAMES: Record<number, string> = {
 
 interface PerksBarProps {
   onOpenModal: () => void;
-  /** When set, clicking a perk activates it (burn + apply) instead of opening the modal. */
   onUsePerk?: (tokenId: bigint, perk: number, strength: number, name: string) => void;
   className?: string;
 }
 
 export default function PerksBar({ onOpenModal, onUsePerk, className = "" }: PerksBarProps) {
-  const { address } = useAccount();
-  const chainId = useChainId();
-  const contractAddress = REWARD_CONTRACT_ADDRESSES[chainId as keyof typeof REWARD_CONTRACT_ADDRESSES] as Address | undefined;
+  const { address, perksGrouped } = useDojoOwnedPerks();
 
-  const { data: ownedCountRaw } = useReadContract({
-    address: contractAddress,
-    abi: RewardABI,
-    functionName: "ownedTokenCount",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!contractAddress },
-  });
-
-  const ownedCount = Number(ownedCountRaw ?? 0);
-
-  const tokenCalls = useMemo(() => {
-    if (!contractAddress || !address || ownedCount <= 0) return [];
-    return Array.from({ length: ownedCount }, (_, i) => ({
-      address: contractAddress,
-      abi: RewardABI as Abi,
-      functionName: "tokenOfOwnerByIndex" as const,
-      args: [address, BigInt(i)],
-    }));
-  }, [contractAddress, address, ownedCount]);
-
-  const { data: tokenResults } = useReadContracts({
-    contracts: tokenCalls,
-    query: { enabled: ownedCount > 0 && !!contractAddress && !!address },
-  });
-
-  const ownedTokenIds =
-    tokenResults
-      ?.map((r) => (r.status === "success" ? (r.result as bigint) : null))
-      .filter((id): id is bigint => id !== null && id >= COLLECTIBLE_ID_START) ?? [];
-
-  const infoCalls = useMemo(() => {
-    if (!contractAddress || ownedTokenIds.length === 0) return [];
-    return ownedTokenIds.map((id) => ({
-      address: contractAddress,
-      abi: RewardABI as Abi,
-      functionName: "getCollectibleInfo" as const,
-      args: [id],
-    }));
-  }, [contractAddress, ownedTokenIds]);
-
-  const { data: infoResults } = useReadContracts({
-    contracts: infoCalls,
-    query: { enabled: ownedTokenIds.length > 0 },
-  });
-
-  const perks = useMemo(() => {
-    if (!infoResults || infoResults.length !== ownedTokenIds.length) return [];
-    return infoResults
-      .map((res, i) => {
-        if (res?.status !== "success") return null;
-        const tokenId = ownedTokenIds[i];
-        if (tokenId == null || tokenId < COLLECTIBLE_ID_START) return null;
-        const arr = res.result as [bigint, bigint?, ...unknown[]];
-        const perk = Number(arr?.[0]);
-        if (Number.isNaN(perk) || perk < 1 || perk > 14) return null;
-        const strength = arr?.[1] != null ? Number(arr[1]) : 1;
-        return { perk, tokenId, strength };
-      })
-      .filter((c): c is { perk: number; tokenId: bigint; strength: number } => c !== null);
-  }, [infoResults, ownedTokenIds]);
-
-  /** Group by perk type: count, and first tokenId/strength for activation */
-  const perksGrouped = useMemo(() => {
-    const byPerk: Record<number, { count: number; tokenId: bigint; strength: number }> = {};
-    perks.forEach(({ perk, tokenId, strength }) => {
-      if (!byPerk[perk]) byPerk[perk] = { count: 1, tokenId, strength };
-      else byPerk[perk].count += 1;
-    });
-    return Object.entries(byPerk).map(([perkStr, v]) => ({
-      perk: Number(perkStr),
-      count: v.count,
-      tokenId: v.tokenId,
-      strength: v.strength,
-    }));
-  }, [perks]);
-
-  if (!address || perks.length === 0) {
+  if (!address || perksGrouped.length === 0) {
     return (
       <button
         type="button"
@@ -151,22 +67,22 @@ export default function PerksBar({ onOpenModal, onUsePerk, className = "" }: Per
       role="region"
       aria-label="Perks bar"
     >
-        {perksGrouped.map(({ perk, count, tokenId, strength }) => (
-          <button
-            key={perk}
-            type="button"
-            onClick={() => (onUsePerk ? onUsePerk(tokenId, perk, strength, PERK_NAMES[perk] ?? `Perk ${perk}`) : onOpenModal())}
-            title={`${PERK_NAMES[perk] ?? `Perk ${perk}`}${count > 1 ? ` (×${count})` : ""}`}
-            className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600/90 to-fuchsia-600/80 border border-violet-400/50 text-white hover:scale-105 hover:border-violet-300/70 active:scale-95 transition-transform shadow-md"
-          >
-            {PERK_ICONS[perk] ?? <Sparkles className="w-4 h-4" />}
-            {count > 1 && (
-              <span className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-md bg-slate-900/95 border border-violet-400/60 text-[9px] font-bold text-violet-200 flex items-center justify-center">
-                ×{count}
-              </span>
-            )}
-          </button>
-        ))}
+      {perksGrouped.map(({ perk, count, tokenId, strength }) => (
+        <button
+          key={perk}
+          type="button"
+          onClick={() => (onUsePerk ? onUsePerk(tokenId, perk, strength, PERK_NAMES[perk] ?? `Perk ${perk}`) : onOpenModal())}
+          title={`${PERK_NAMES[perk] ?? `Perk ${perk}`}${count > 1 ? ` (×${count})` : ""}`}
+          className="relative flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600/90 to-fuchsia-600/80 border border-violet-400/50 text-white hover:scale-105 hover:border-violet-300/70 active:scale-95 transition-transform shadow-md"
+        >
+          {PERK_ICONS[perk] ?? <Sparkles className="w-4 h-4" />}
+          {count > 1 && (
+            <span className="absolute -bottom-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-md bg-slate-900/95 border border-violet-400/60 text-[9px] font-bold text-violet-200 flex items-center justify-center">
+              ×{count}
+            </span>
+          )}
+        </button>
+      ))}
     </div>
   );
 }

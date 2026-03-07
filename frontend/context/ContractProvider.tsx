@@ -517,8 +517,8 @@ export function useRegisteredAIAgents() {
 
 /**
  * Submit reputation feedback for an ERC-8004 agent after an AI game.
- * Call after endAIGame (claim) succeeds. Human's wallet pays gas on Celo.
- * Requires NEXT_PUBLIC_ERC8004_AGENT_ID to be set; no-op if not set or not on Celo.
+* Call after endAIGame (claim) succeeds. Human's wallet pays gas on Starknet.
+   * Requires NEXT_PUBLIC_ERC8004_AGENT_ID to be set; no-op if not set or not on Starknet.
  */
 export function useGiveERC8004Feedback() {
   const chainId = useChainId();

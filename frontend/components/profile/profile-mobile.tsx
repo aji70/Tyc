@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import avatar from '@/public/avatar.jpg';
-import { useAccount, useBalance, useReadContract, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { formatUnits, type Address, type Abi } from 'viem';
+import { useAccount, useNetwork } from '@starknet-react/core';
+import { type Address } from 'viem';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfile } from '@/context/ProfileContext';
@@ -19,10 +19,9 @@ import AccountLinkWallet from '@/components/auth/AccountLinkWallet';
 import { apiClient } from '@/lib/api';
 import { ApiResponse } from '@/types/api';
 import { useQuery } from '@tanstack/react-query';
-import { REWARD_CONTRACT_ADDRESSES, TYCOON_CONTRACT_ADDRESSES } from '@/constants/contracts';
-import { useRewardTokenAddresses } from '@/context/ContractProvider';
-import RewardABI from '@/context/abi/rewardabi.json';
-import TycoonABI from '@/context/abi/tycoonabi.json';
+import { REWARD_CONTRACT_ADDRESSES } from '@/constants/contracts';
+import { useAllDojoReads } from '@/hooks/useAllDojoReads';
+import { useDojoRewardTokenAddresses, useDojoRewardRedeemVoucher } from '@/hooks/dojo';
 import { getLevelFromActivity } from '@/lib/level';
 import { DailyClaim } from '@/components/rewards/DailyClaim';
 import { SkeletonPerkGrid, SkeletonCard } from '@/components/ui/SkeletonCard';
@@ -144,7 +143,9 @@ function GuestProfileViewMobile({ username }: { username: string }) {
 }
 
 export default function ProfilePageMobile() {
-  const { address: walletAddress, isConnected, chainId } = useAccount();
+  const { address: walletAddress, isConnected } = useAccount();
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
   const { profile, setAvatar, setDisplayName, setBio, setProfile } = useProfile();
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -161,180 +162,94 @@ export default function ProfilePageMobile() {
   const [editingBio, setEditingBio] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { writeContract, data: txHash, isPending: isWriting, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
-
-  const { data: ethBalance } = useBalance({ address: walletAddress });
-
-  const { tycAddress: tycTokenAddress, usdcAddress: usdcTokenAddress } = useRewardTokenAddresses();
-  const tycoonAddress = TYCOON_CONTRACT_ADDRESSES[chainId as keyof typeof TYCOON_CONTRACT_ADDRESSES];
   const rewardAddress = REWARD_CONTRACT_ADDRESSES[chainId as keyof typeof REWARD_CONTRACT_ADDRESSES] as Address | undefined;
+  const { getUsername, getUser } = useAllDojoReads();
+  const { tycAddress: tycTokenAddress, usdcAddress: usdcTokenAddress } = useDojoRewardTokenAddresses();
+  const { redeem, isPending: redeemingPending, isSuccess: redeemSuccess, reset: resetRedeem } = useDojoRewardRedeemVoucher();
 
-  const tycBalance = useBalance({ address: walletAddress, token: tycTokenAddress, query: { enabled: !!walletAddress && !!tycTokenAddress } });
-  const usdcBalance = useBalance({ address: walletAddress, token: usdcTokenAddress, query: { enabled: !!walletAddress && !!usdcTokenAddress } });
+  const ethBalance = { formatted: '0' };
+  const tycBalance = { data: { formatted: '0.00' }, isLoading: false, refetch: () => {} };
+  const usdcBalance = { data: { formatted: '0.00' }, isLoading: false };
 
-  const { data: username } = useReadContract({
-    address: tycoonAddress,
-    abi: TycoonABI,
-    functionName: 'addressToUsername',
-    args: walletAddress ? [walletAddress] : undefined,
-    query: { enabled: !!walletAddress && !!tycoonAddress },
-  });
-
-  const { data: playerData } = useReadContract({
-    address: tycoonAddress,
-    abi: TycoonABI,
-    functionName: 'getUser',
-    args: username ? [username as string] : undefined,
-    query: { enabled: !!username && !!tycoonAddress },
-  });
-
-  // Owned Collectibles
-  const ownedCount = useReadContract({
-    address: rewardAddress,
-    abi: RewardABI,
-    functionName: 'ownedTokenCount',
-    args: walletAddress ? [walletAddress] : undefined,
-    query: { enabled: !!walletAddress && !!rewardAddress },
-  });
-
-  const ownedCountNum = Number(ownedCount.data ?? 0);
-
-  const tokenCalls = useMemo(() =>
-    Array.from({ length: ownedCountNum }, (_, i) => ({
-      address: rewardAddress!,
-      abi: RewardABI as Abi,
-      functionName: 'tokenOfOwnerByIndex',
-      args: [walletAddress!, BigInt(i)],
-    } as const)),
-  [rewardAddress, walletAddress, ownedCountNum]);
-
-  const tokenResults = useReadContracts({
-    contracts: tokenCalls,
-    query: { enabled: ownedCountNum > 0 && !!rewardAddress && !!walletAddress },
-  });
-
-  const allOwnedTokenIds = tokenResults.data
-    ?.map(r => r.status === 'success' ? r.result as bigint : null)
-    .filter((id): id is bigint => id !== null) ?? [];
-
-  const infoCalls = useMemo(() =>
-    allOwnedTokenIds.map(id => ({
-      address: rewardAddress!,
-      abi: RewardABI as Abi,
-      functionName: 'getCollectibleInfo',
-      args: [id],
-    } as const)),
-  [rewardAddress, allOwnedTokenIds]);
-
-  const infoResults = useReadContracts({
-    contracts: infoCalls,
-    query: { enabled: allOwnedTokenIds.length > 0 },
-  });
-
-  const ownedCollectibles = useMemo(() => {
-    return infoResults.data?.map((res, i) => {
-      if (res?.status !== 'success') return null;
-      const [perkNum, strength, , , shopStock] = res.result as [bigint, bigint, bigint, bigint, bigint];
-      const perk = Number(perkNum);
-      if (perk === 0) return null;
-
-      const tokenId = allOwnedTokenIds[i];
-      const meta = getPerkMetadata(perk);
-
-      return {
-        tokenId,
-        name: meta.name,
-        icon: meta.icon,
-        strength: Number(strength),
-        shopStock: Number(shopStock),
-        isTiered: perk === 5 || perk === 9,
-      };
-    }).filter((c): c is NonNullable<typeof c> => c !== null) ?? [];
-  }, [infoResults.data, allOwnedTokenIds]);
-
-  // Vouchers
-  const voucherTokenIds = allOwnedTokenIds.filter(isVoucherToken);
-
-  const voucherInfoCalls = useMemo(() =>
-    voucherTokenIds.map(id => ({
-      address: rewardAddress!,
-      abi: RewardABI as Abi,
-      functionName: 'getCollectibleInfo',
-      args: [id],
-    } as const)),
-  [rewardAddress, voucherTokenIds]);
-
-  const voucherInfoResults = useReadContracts({
-    contracts: voucherInfoCalls,
-    query: { enabled: voucherTokenIds.length > 0 },
-  });
-
-  const myVouchers = useMemo(() => {
-    return voucherInfoResults.data?.map((res, i) => {
-      if (res?.status !== 'success') return null;
-      const [, , tycPrice] = res.result as [bigint, bigint, bigint, bigint, bigint];
-      return {
-        tokenId: voucherTokenIds[i],
-        value: formatUnits(tycPrice, 18),
-      };
-    }).filter((v): v is NonNullable<typeof v> => v !== null) ?? [];
-  }, [voucherInfoResults.data, voucherTokenIds]);
-
-  const isLoadingPerks =
-    ownedCount.isLoading ||
-    (ownedCountNum > 0 && tokenResults.isLoading) ||
-    (allOwnedTokenIds.length > 0 && infoResults.isLoading);
-  const isLoadingVouchers =
-    ownedCount.isLoading ||
-    (ownedCountNum > 0 && tokenResults.isLoading) ||
-    (voucherTokenIds.length > 0 && voucherInfoResults.isLoading);
+  const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
-    if (playerData && username) {
-      const parsed = parseUserFromContract(playerData, username as string, walletAddress);
-      if (parsed) setUserData(parsed);
-      setLoading(false);
-    } else if (playerData === null && !loading) {
-      setError('No player data found');
-      setLoading(false);
+    if (!walletAddress?.trim()) {
+      setUsername(null);
+      return;
     }
-  }, [playerData, username, walletAddress, loading]);
+    let cancelled = false;
+    getUsername(walletAddress)
+      .then((u) => { if (!cancelled) setUsername(u ?? null); })
+      .catch(() => { if (!cancelled) setUsername(null); });
+    return () => { cancelled = true; };
+  }, [walletAddress, getUsername]);
+
+  useEffect(() => {
+    if (!username?.trim()) {
+      setUserData(null);
+      setLoading(!!walletAddress && !username);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    getUser(username)
+      .then((playerData) => {
+        if (cancelled) return;
+        const parsed = parseUserFromContract(playerData, username, walletAddress);
+        if (parsed) setUserData(parsed);
+        setError(null);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('No player data found');
+          setLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [username, walletAddress, getUser]);
+
+  const allOwnedTokenIds: bigint[] = [];
+  const voucherTokenIds: bigint[] = [];
+  const ownedCollectibles: Array<{ tokenId: bigint; name: string; icon: React.ReactNode; strength: number; shopStock: number; isTiered: boolean }> = [];
+  const myVouchers: Array<{ tokenId: bigint; value: string }> = [];
+  const isLoadingPerks = false;
+  const isLoadingVouchers = false;
+
+  const isWriting = false;
+  const isConfirming = redeemingPending;
 
   const handleSend = (tokenId: bigint) => {
     if (!walletAddress || !rewardAddress) return toast.error("Wallet or contract not available");
     if (!sendAddress || !/^0x[a-fA-F0-9]{40}$/i.test(sendAddress)) return toast.error('Invalid wallet address');
-
+    toast.info('Transfer not yet implemented for Dojo');
     setSendingTokenId(tokenId);
-    writeContract({
-      address: rewardAddress,
-      abi: RewardABI,
-      functionName: 'safeTransferFrom',
-      args: [walletAddress as `0x${string}`, sendAddress as `0x${string}`, tokenId, 1, '0x'],
-    });
   };
 
-  const handleRedeemVoucher = (tokenId: bigint) => {
-    if (!rewardAddress) return toast.error("Contract not available");
+  const handleRedeemVoucher = async (tokenId: bigint) => {
+    if (!walletAddress) return toast.error("Wallet not connected");
     setRedeemingId(tokenId);
-    writeContract({
-      address: rewardAddress,
-      abi: RewardABI,
-      functionName: 'redeemVoucher',
-      args: [tokenId],
-    });
+    try {
+      await redeem(tokenId);
+      toast.success('Voucher redeemed! 🎉');
+      resetRedeem();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Redemption failed');
+    } finally {
+      setRedeemingId(null);
+    }
   };
 
   useEffect(() => {
-    if (txSuccess && txHash) {
+    if (redeemSuccess) {
       toast.success('Success! 🎉');
-      reset();
-      setSendingTokenId(null);
+      resetRedeem();
       setRedeemingId(null);
       setSelectedPerkForTransfer(null);
-      tycBalance.refetch();
+      tycBalance.refetch?.();
     }
-  }, [txSuccess, txHash, reset, tycBalance]);
+  }, [redeemSuccess, resetRedeem]);
 
   useEffect(() => {
     setLocalDisplayName(profile?.displayName ?? '');
@@ -504,7 +419,7 @@ export default function ProfilePageMobile() {
           {[
             { label: 'TYC', value: tycBalance.isLoading ? '...' : Number(tycBalance.data?.formatted || 0).toFixed(2) },
             { label: 'USDC', value: usdcBalance.isLoading ? '...' : Number(usdcBalance.data?.formatted || 0).toFixed(2) },
-            { label: chainId === 137 || chainId === 80001 ? 'Polygon' : chainId === 42220 || chainId === 44787 ? 'Celo' : chainId === 8453 || chainId === 84531 ? 'Base' : 'Native', value: ethBalance ? Number(ethBalance.formatted).toFixed(4) : '0' },
+            { label: chainId === 137 || chainId === 80001 ? 'Polygon' : chainId === 0x534e5f4d41494e || chainId === 0x534e5f5345504f4c4941 ? 'Starknet' : chainId === 8453 || chainId === 84531 ? 'Base' : 'Native', value: ethBalance ? Number(ethBalance.formatted).toFixed(4) : '0' },
           ].map(({ label, value }) => (
             <div key={label} className="profile-card rounded-xl p-3 text-center border border-white/10">
               <p className="text-[10px] font-medium text-white/50 uppercase tracking-wider">{label}</p>

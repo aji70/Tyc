@@ -4,12 +4,12 @@ import { toast } from "react-hot-toast";
 import { Globe } from "lucide-react";
 
 const WRONG_NETWORK_MSG =
-  "Your wallet is on the wrong network. Switch to Celo to claim your rewards.";
+  "Your wallet is on the wrong network. Switch to Starknet to claim your rewards.";
 
 /**
- * Show a toast with a "Switch to Celo" button when claim fails due to wrong network.
+ * Show a toast with a "Switch to Starknet" button when claim fails due to wrong network.
  * Call this instead of the generic error toast when contractGame is missing and user
- * is not on Celo (chain 42220).
+ * is not on Starknet.
  */
 export function showWrongNetworkClaimToast(openNetworkSwitcher: () => void) {
   toast.custom(
@@ -26,7 +26,7 @@ export function showWrongNetworkClaimToast(openNetworkSwitcher: () => void) {
               }}
               className="mt-3 w-full py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 text-[#010F10] font-bold rounded-lg transition-colors text-sm"
             >
-              Switch to Celo
+              Switch to Starknet
             </button>
           </div>
         </div>

@@ -8,7 +8,7 @@ import React, {
   useMemo,
   type ReactNode,
 } from "react";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { apiClient } from "@/lib/api";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import type {

@@ -196,6 +196,132 @@ export function useIsRegisteredOnChain(address: string | undefined) {
   return { isRegisteredOnChain, isLoading, error };
 }
 
+/** Shape compatible with ContractProvider useGetGameByCode for board pages. */
+export type DojoGameByCodeData = {
+  id: bigint;
+  code?: string;
+  creator?: string;
+  status?: number;
+  winner?: string;
+  numberOfPlayers?: number;
+  joinedPlayers?: number;
+  mode?: number;
+  ai?: boolean;
+  stakePerPlayer?: bigint;
+  totalStaked?: bigint;
+  createdAt?: bigint;
+  endedAt?: bigint;
+};
+
+/**
+ * Reactive hook for on-chain game by code (Dojo). Drop-in for ContractProvider useGetGameByCode.
+ */
+export function useGetGameByCode(code?: string, options = { enabled: true }) {
+  const { getGameByCode } = useAllDojoReads();
+  const [data, setData] = useState<DojoGameByCodeData | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!options.enabled || !code?.trim()) {
+      setData(undefined);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    getGameByCode(code.trim().toUpperCase())
+      .then((raw: unknown) => {
+        if (cancelled) return;
+        const arr = Array.isArray(raw) ? raw : [raw];
+        const gameId = arr[0] != null ? BigInt(String(arr[0])) : BigInt(0);
+        if (gameId === BigInt(0)) {
+          setData(undefined);
+          return;
+        }
+        const parsed: DojoGameByCodeData = {
+          id: gameId,
+          code,
+          creator: arr[1] != null ? String(arr[1]) : undefined,
+          numberOfPlayers: arr[2] != null ? Number(arr[2]) : undefined,
+          joinedPlayers: arr[3] != null ? Number(arr[3]) : undefined,
+          status: arr[4] != null ? Number(arr[4]) : undefined,
+          mode: arr[6] != null ? Number(arr[6]) : undefined,
+          ai: arr[9] != null ? Boolean(arr[9]) : undefined,
+          stakePerPlayer: arr[8] != null ? BigInt(String(arr[8])) : undefined,
+          totalStaked: arr[12] != null ? BigInt(String(arr[12])) : undefined,
+          createdAt: arr[10] != null ? BigInt(String(arr[10])) : undefined,
+          endedAt: arr[11] != null ? BigInt(String(arr[11])) : undefined,
+        };
+        setData(parsed);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setData(undefined);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [code, options.enabled, getGameByCode]);
+
+  return { data, isLoading, error };
+}
+
+/**
+ * Reactive hook for last game code by account (Dojo). Drop-in for ContractProvider usePreviousGameCode.
+ */
+export function usePreviousGameCode(address: string | undefined) {
+  const { getLastGameCode } = useAllDojoReads();
+  const [data, setData] = useState<string | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!address?.trim()) {
+      setData(undefined);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    getLastGameCode(address)
+      .then((raw: unknown) => {
+        if (cancelled) return;
+        const arr = Array.isArray(raw) ? raw : [raw];
+        const felt = arr[0];
+        if (felt == null || felt === BigInt(0) || felt === 0 || felt === '0' || felt === '0x0') {
+          setData(undefined);
+          return;
+        }
+        try {
+          const decoded = shortString.decodeShortString('0x' + BigInt(String(felt)).toString(16));
+          setData(decoded || undefined);
+        } catch {
+          setData(undefined);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setData(undefined);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [address, getLastGameCode]);
+
+  return { data, isLoading, error };
+}
+
 /**
  * Reactive hook for on-chain username (Dojo). Use in game-settings etc.
  */
@@ -228,4 +354,73 @@ export function useDojoUsername(address: string | undefined) {
   }, [address, getUsername]);
 
   return { username, isLoading };
+}
+
+/** Shape compatible with ContractProvider useGetUser for useUserLevel. */
+export type DojoUserData = {
+  id: bigint;
+  username: string;
+  playerAddress: string;
+  registeredAt: bigint;
+  gamesPlayed: bigint;
+  gamesWon: bigint;
+  gamesLost: bigint;
+  totalStaked: bigint;
+  totalEarned: bigint;
+  totalWithdrawn: bigint;
+};
+
+/**
+ * Reactive hook for on-chain user by username (Dojo). API-compatible with ContractProvider useGetUser.
+ */
+export function useDojoGetUser(username: string | undefined) {
+  const { getUser } = useAllDojoReads();
+  const [data, setData] = useState<DojoUserData | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (!username?.trim()) {
+      setData(undefined);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    setError(null);
+    getUser(username.trim())
+      .then((raw: unknown) => {
+        if (cancelled) return;
+        const arr = Array.isArray(raw) ? raw : [raw];
+        if (!arr.length || arr[0] == null) {
+          setData(undefined);
+          return;
+        }
+        setData({
+          id: BigInt(String(arr[0])),
+          username: arr[1] != null ? String(arr[1]) : '',
+          playerAddress: arr[2] != null ? String(arr[2]) : '0x0',
+          registeredAt: arr[3] != null ? BigInt(String(arr[3])) : BigInt(0),
+          gamesPlayed: arr[4] != null ? BigInt(String(arr[4])) : BigInt(0),
+          gamesWon: arr[5] != null ? BigInt(String(arr[5])) : BigInt(0),
+          gamesLost: arr[6] != null ? BigInt(String(arr[6])) : BigInt(0),
+          totalStaked: arr[7] != null ? BigInt(String(arr[7])) : BigInt(0),
+          totalEarned: arr[8] != null ? BigInt(String(arr[8])) : BigInt(0),
+          totalWithdrawn: arr[9] != null ? BigInt(String(arr[9])) : BigInt(0),
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+          setData(undefined);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [username, getUser]);
+
+  return { data, isLoading, error };
 }

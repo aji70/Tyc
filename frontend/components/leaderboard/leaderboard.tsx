@@ -2,27 +2,25 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { useAccount, useChainId, useReadContract } from 'wagmi';
+import { useAccount, useNetwork } from '@starknet-react/core';
+import { useDojoGetUser, useDojoUsername } from '@/hooks/useAllDojoReads';
 import { Trophy, TrendingUp, Wallet, Target, Loader2, Users, ChevronLeft } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TYCOON_CONTRACT_ADDRESSES } from '@/constants/contracts';
-import TycoonABI from '@/context/abi/tycoonabi.json';
-
-/** Map chainId to backend chain name for leaderboard filter. Frontend is Celo-only. */
+/** Map chainId to backend chain name for leaderboard filter. Frontend is Starknet-only. */
 function chainIdToLeaderboardChain(chainId: number): string {
   switch (chainId) {
     case 137:
     case 80001:
       return 'POLYGON';
-    case 42220:
-    case 44787:
-      return 'CELO';
+    case 0x534e5f4d41494e:
+    case 0x534e5f5345504f4c4941:
+      return 'STARKNET';
     case 8453:
     case 84531:
       return 'BASE';
     default:
-      return 'CELO';
+      return 'STARKNET';
   }
 }
 
@@ -86,9 +84,9 @@ function normalizeLeaderboardArray(res: any): unknown[] {
 
 export default function Leaderboard() {
   const { address: walletAddress, isConnected } = useAccount();
-  const chainId = useChainId();
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
   const chainParam = chainIdToLeaderboardChain(chainId);
-  const tycoonAddress = TYCOON_CONTRACT_ADDRESSES[chainId as keyof typeof TYCOON_CONTRACT_ADDRESSES];
 
   const [activeTab, setActiveTab] = useState<LeaderboardKind>('wins');
   const [loading, setLoading] = useState(true);
@@ -98,31 +96,18 @@ export default function Leaderboard() {
   const [stakes, setStakes] = useState<StakesRow[]>([]);
   const [winrate, setWinrate] = useState<WinRateRow[]>([]);
 
-  // Same as profile: get username from contract then getUser(username) for on-chain stats
-  const { data: username } = useReadContract({
-    address: tycoonAddress,
-    abi: TycoonABI,
-    functionName: 'addressToUsername',
-    args: walletAddress ? [walletAddress] : undefined,
-    query: { enabled: !!walletAddress && !!tycoonAddress },
-  });
-  const { data: contractUser } = useReadContract({
-    address: tycoonAddress,
-    abi: TycoonABI,
-    functionName: 'getUser',
-    args: username ? [username as string] : undefined,
-    query: { enabled: !!username && !!tycoonAddress },
-  });
+  const { username } = useDojoUsername(walletAddress ?? undefined);
+  const { data: contractUser } = useDojoGetUser(username ?? undefined);
 
   const currentUserFromContract = useMemo((): WinsRow & EarningsRow & StakesRow & WinRateRow | null => {
     if (!contractUser || !username) return null;
-    const t = contractUser as [bigint, string, string, bigint, bigint, bigint, bigint, bigint, bigint, bigint];
-    const gamesPlayed = Number(t[4] ?? 0);
-    const gamesWon = Number(t[5] ?? 0);
-    const gamesLost = Number(t[6] ?? 0);
-    const totalStaked = Number(t[7] ?? 0);
-    const totalEarned = Number(t[8] ?? 0);
-    const totalWithdrawn = Number(t[9] ?? 0);
+    const t = contractUser;
+    const gamesPlayed = Number(t.gamesPlayed ?? 0);
+    const gamesWon = Number(t.gamesWon ?? 0);
+    const gamesLost = Number(t.gamesLost ?? 0);
+    const totalStaked = Number(t.totalStaked ?? 0);
+    const totalEarned = Number(t.totalEarned ?? 0);
+    const totalWithdrawn = Number(t.totalWithdrawn ?? 0);
     return {
       id: -1,
       username: String(username),

@@ -11,7 +11,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { Game, GameProperty, Player, Property } from "@/types/game";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiResponse } from "@/types/api";
 import { useMediaQuery } from "@/components/useMediaQuery";

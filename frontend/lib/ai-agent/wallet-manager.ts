@@ -1,6 +1,6 @@
 // lib/ai-agent/wallet-manager.ts
 // SERVER-ONLY: Use only in API routes or server modules. Do not import in client components.
-// AI_PLAYER_*_PRIVATE_KEY and CELO_RPC_URL must be server env vars (never NEXT_PUBLIC_*).
+// AI_PLAYER_*_PRIVATE_KEY and CELO_RPC_URL must be server env vars (never NEXT_PUBLIC_*). TODO: migrate to Starknet when backend AI supports it.
 import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { celo, celoAlfajores } from 'viem/chains';

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { useOnlineUsers } from "@/hooks/useOnlineUsers";
 import { useMediaQuery } from "@/components/useMediaQuery";

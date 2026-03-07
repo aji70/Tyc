@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { apiClient } from "@/lib/api";
 import { simplifyAiTip } from "@/lib/simplifyAiTip";
 import { socketService } from "@/lib/socket";
@@ -18,7 +18,8 @@ import { getPlayerSymbol } from "@/lib/types/symbol";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { getDiceValues, JAIL_POSITION, MONOPOLY_STATS } from "@/components/game/constants";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
-import { useRewardBurnCollectible, useGetGameByCode } from "@/context/ContractProvider";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
+import { useDojoRewardBurnCollectible } from "@/hooks/dojo/useDojoRewardBurnCollectible";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { useGameTrades } from "@/hooks/useGameTrades";
 import TradeAlertPill from "@/components/game/TradeAlertPill";
@@ -314,7 +315,7 @@ function Board3DPageContent() {
     strength: number;
     name: string;
   } | null>(null);
-  const { burn: burnCollectible, isSuccess: burnSuccess } = useRewardBurnCollectible();
+  const { burn: burnCollectible, isSuccess: burnSuccess } = useDojoRewardBurnCollectible();
   const BUY_TIPS_STORAGE_KEY = "tycoon_buy_tips_3d_multi";
   const [buyTipsOn, setBuyTipsOn] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -482,7 +483,7 @@ function Board3DPageContent() {
   const landedPositionThisTurnRef = useRef<number | null>(null);
   const hasScheduledTurnEndRef = useRef(false);
 
-  const { data: contractGame } = useGetGameByCode(game?.code ?? "");
+  const { data: contractGame } = useGetGameByCode(game?.code ?? "", { enabled: !!game?.code });
   const { tradeRequests: incomingTrades } = useGameTrades({
     gameId: game?.id,
     myUserId: me?.user_id,

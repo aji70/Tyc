@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useTournament } from "@/context/TournamentContext";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { useRegisterForTournamentOnChain } from "@/hooks/useRegisterForTournamentOnChain";

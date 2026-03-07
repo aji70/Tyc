@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { apiClient } from "@/lib/api";
 import { simplifyAiTip } from "@/lib/simplifyAiTip";
 import { socketService } from "@/lib/socket";
@@ -21,7 +21,8 @@ import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { useGameTrades } from "@/hooks/useGameTrades";
 import { useMobilePropertyActions } from "@/hooks/useMobilePropertyActions";
-import { useRewardBurnCollectible, useGetGameByCode } from "@/context/ContractProvider";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
+import { useDojoRewardBurnCollectible } from "@/hooks/dojo/useDojoRewardBurnCollectible";
 import { Toaster, toast } from "react-hot-toast";
 import { MONOPOLY_STATS } from "@/components/game/constants";
 import { CardModal } from "@/components/game/modals/cards";
@@ -273,7 +274,7 @@ function Board3DMobilePageContent() {
     strength: number;
     name: string;
   } | null>(null);
-  const { burn: burnCollectible, isSuccess: burnSuccess } = useRewardBurnCollectible();
+  const { burn: burnCollectible, isSuccess: burnSuccess } = useDojoRewardBurnCollectible();
   const [liveMovementOverride, setLiveMovementOverride] = useState<Record<number, number>>({});
   const [rollingDice, setRollingDice] = useState<{ die1: number; die2: number } | null>(null);
   const [lastRollResultLive, setLastRollResultLive] = useState<{ die1: number; die2: number; total: number } | null>(null);
@@ -549,7 +550,7 @@ function Board3DMobilePageContent() {
     return merged;
   }, [isLiveGame, liveAnimatedPositions, liveMovementOverride, livePlayers]);
 
-  const { data: contractGame } = useGetGameByCode(game?.code ?? "");
+  const { data: contractGame } = useGetGameByCode(game?.code ?? "", { enabled: !!game?.code });
 
   const { tradeRequests: incomingTrades } = useGameTrades({
     gameId: game?.id,

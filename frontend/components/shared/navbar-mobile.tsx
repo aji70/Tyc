@@ -15,7 +15,7 @@ import avatar from '@/public/avatar.jpg';
 import WalletConnectModal from './wallet-connect-modal';
 import WalletDisconnectModal from './wallet-disconnect-modal';
 import NetworkSwitcherModal from './network-switcher-modal';
-import { useGetUsername } from '@/context/ContractProvider';
+import { useDojoUsername } from '@/hooks/useAllDojoReads';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { isAddress } from 'viem';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
@@ -106,7 +106,7 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
   const safeAddress = address && isAddress(address)
     ? (address as `0x${string}`)
     : undefined;
-  const { data: fetchedUsername } = useGetUsername(safeAddress);
+  const { username: fetchedUsername } = useDojoUsername(safeAddress ?? undefined);
   const profileAvatar = useProfileAvatar();
 
   const toggleSound = () => {

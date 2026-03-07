@@ -15,7 +15,7 @@ import ClaimPropertyModal from "../dev";
 import { useAiPlayerLogic } from "./useAiPlayerLogic";
 import { isAIPlayer } from "@/utils/gameUtils";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
-import { useChainId } from "wagmi";
+import { useNetwork } from "@starknet-react/core";
 import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import { showWrongNetworkClaimToast } from "@/lib/utils/wrongNetworkClaimToast";
 
@@ -111,10 +111,11 @@ export default function GamePlayers({
     aiMortgageProperties,
   } = logic;
 
-  const chainId = useChainId();
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
   const { connectors, connectWallet } = useStarknetWallet();
   const openConnect = () => connectors[0] && connectWallet(connectors[0]);
-  const CELO_CHAIN_ID = 42220;
+  const STARKNET_SEPOLIA_CHAIN_ID = 0x534e5f5345504f4c4941;
 
   const toggleEmpire = useCallback(() => setShowEmpire((p) => !p), []);
   const toggleTrade = useCallback(() => setShowTrade((p) => !p), []);

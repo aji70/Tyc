@@ -6,10 +6,7 @@ import { Dices, Gamepad2 } from "lucide-react";
 import { TypeAnimation } from "react-type-animation";
 import { useRouter } from "next/navigation";
 import { useAccount } from "@starknet-react/core";
-import {
-  usePreviousGameCode,
-  useGetGameByCode,
-} from "@/context/ContractProvider";
+import { usePreviousGameCode, useGetGameByCode } from "@/hooks/useAllDojoReads";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useAllDojoReads, useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
@@ -67,7 +64,7 @@ const HeroSectionMobile: React.FC = () => {
 
   const { data: gameCode } = usePreviousGameCode(address);
 
-  const { data: contractGame } = useGetGameByCode(gameCode);
+  const { data: contractGame } = useGetGameByCode(gameCode ?? "", { enabled: !!gameCode });
 
   const [backendGame, setBackendGame] = useState<{ status: string; is_ai?: boolean } | null>(null);
   const [guestLastGame, setGuestLastGame] = useState<{ code: string; status: string; is_ai?: boolean } | null>(null);

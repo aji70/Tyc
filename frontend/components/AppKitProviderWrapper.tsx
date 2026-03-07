@@ -4,13 +4,13 @@
 import { ReactNode, useEffect } from 'react';
 import { createAppKit } from '@reown/appkit/react';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
-import { celo } from '@reown/appkit/networks';
+import { mainnet } from '@reown/appkit/networks';
 
 const projectId = process.env.NEXT_PUBLIC_PROJECT_ID || '912f9a3279905a7dd417a7bf68e04209';
 
-// Celo only
+// Starknet migration: AppKit has no native Starknet; use mainnet as fallback.
 const wagmiAdapter = new WagmiAdapter({
-  networks: [celo],
+  networks: [mainnet],
   projectId,
   ssr: true, // Important for Next.js
 });
@@ -26,7 +26,7 @@ export default function AppKitProviderWrapper({
     if (!isInitialized) {
       createAppKit({
         adapters: [wagmiAdapter],
-        networks: [celo],
+        networks: [mainnet],
         projectId,
         themeVariables: {
           '--w3m-z-index': 10000, // Set high z-index for Reown modal

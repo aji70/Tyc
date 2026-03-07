@@ -1,14 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-  useAccount,
-  useChainId,
-  useBalance,
-  useReadContract,
-  useReadContracts,
-} from 'wagmi';
-import { formatUnits, type Address, type Abi } from 'viem';
+import { useAccount, useNetwork } from '@starknet-react/core';
+import { formatUnits, type Address } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -36,16 +30,13 @@ import {
   Banknote,
 } from 'lucide-react';
 
-import RewardABI from '@/context/abi/rewardabi.json';
-import Erc20Abi from '@/context/abi/ERC20abi.json';
 import { REWARD_CONTRACT_ADDRESSES } from '@/constants/contracts';
 
 import {
-  useRewardBuyCollectible,
-  useRewardRedeemVoucher,
-  useApprove,
-  useRewardTokenAddresses,
-} from '@/context/ContractProvider';
+  useDojoRewardBuyCollectible,
+  useDojoRewardRedeemVoucher,
+  useDojoRewardTokenAddresses,
+} from '@/hooks/dojo';
 import { apiClient } from '@/lib/api';
 
 const VOUCHER_ID_START = 1_000_000_000;
@@ -94,10 +85,11 @@ export default function GameShopMobile() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
 
   const contractAddress = REWARD_CONTRACT_ADDRESSES[chainId as keyof typeof REWARD_CONTRACT_ADDRESSES] as Address | undefined;
-  const { usdcAddress: usdcTokenAddress } = useRewardTokenAddresses();
+  const { usdcAddress: usdcTokenAddress } = useDojoRewardTokenAddresses();
 
   const [isVoucherPanelOpen, setIsVoucherPanelOpen] = useState(false);
   const [shopTab, setShopTab] = useState<'perks' | 'bundles'>('perks');
@@ -174,79 +166,23 @@ export default function GameShopMobile() {
     };
   }, [isVoucherPanelOpen]);
 
-  // USDC Allowance
-  const { data: usdcAllowance } = useReadContract({
-    address: usdcTokenAddress,
-    abi: Erc20Abi,
-    functionName: 'allowance',
-    args: address && contractAddress ? [address, contractAddress] : undefined,
-    query: { enabled: !!address && !!usdcTokenAddress && !!contractAddress },
-  });
+  const usdcAllowance = BigInt(0);
+  const refetchUsdc = () => {};
 
-  // Buy / Approve / Redeem hooks
-  const { buy, isPending: buyingPending, isConfirming: buyingConfirming, isSuccess: buySuccess, error: buyError, reset: resetBuy } = useRewardBuyCollectible();
-  const { approve, isPending: approvePending, isSuccess: approveSuccess, error: approveError, reset: resetApprove } = useApprove();
-  const { redeem, isPending: redeemingPending, isConfirming: redeemingConfirming, isSuccess: redeemSuccess, error: redeemError, reset: resetRedeem } = useRewardRedeemVoucher();
+  const { buy, isPending: buyingPending, isConfirming: buyingConfirming, isSuccess: buySuccess, error: buyError, reset: resetBuy } = useDojoRewardBuyCollectible();
+  const approve = async (_a: unknown, _b: unknown, _c: bigint) => undefined;
+  const approvePending = false;
+  const approveSuccess = false;
+  const approveError = null;
+  const resetApprove = () => {};
+  const { redeem, isPending: redeemingPending, isConfirming: redeemingConfirming, isSuccess: redeemSuccess, error: redeemError, reset: resetRedeem } = useDojoRewardRedeemVoucher();
 
-  // USDC Balance
-  const { data: usdcBalanceData, isLoading: usdcLoading, refetch: refetchUsdc } = useBalance({
-    address,
-    token: usdcTokenAddress,
-    query: { enabled: !!address && !!usdcTokenAddress && isConnected },
-  });
+  const usdcLoading = false;
+  const usdcBalance = '0.00';
 
-  const usdcBalance = usdcBalanceData ? Number(usdcBalanceData.formatted).toFixed(2) : '0.00';
-
-  // Shop Items: Collectibles owned by contract (in shop stock)
-  const { data: contractOwnedCount } = useReadContract({
-    address: contractAddress,
-    abi: RewardABI,
-    functionName: 'ownedTokenCount',
-    args: contractAddress ? [contractAddress] : undefined,
-    query: { enabled: !!contractAddress },
-  });
-
-  const contractTokenCount = Number(contractOwnedCount ?? 0);
-
-  const contractTokenIdCalls = useMemo(
-    () =>
-      Array.from({ length: contractTokenCount }, (_, i) => ({
-        address: contractAddress!,
-        abi: RewardABI as Abi,
-        functionName: 'tokenOfOwnerByIndex' as const,
-        args: [contractAddress!, BigInt(i)] as const,
-      })),
-    [contractAddress, contractTokenCount]
-  );
-
-  const { data: contractTokenIdResults } = useReadContracts({
-    contracts: contractTokenIdCalls,
-    query: { enabled: contractTokenCount > 0 && !!contractAddress },
-  });
-
-  const shopTokenIds = useMemo(() => {
-    return (
-      contractTokenIdResults
-        ?.map((res) => (res.status === 'success' ? (res.result as bigint) : undefined))
-        .filter((id): id is bigint => id !== undefined && isCollectibleToken(id)) ?? []
-    );
-  }, [contractTokenIdResults]);
-
-  const shopInfoCalls = useMemo(
-    () =>
-      shopTokenIds.map((tokenId) => ({
-        address: contractAddress!,
-        abi: RewardABI as Abi,
-        functionName: 'getCollectibleInfo' as const,
-        args: [tokenId] as const,
-      })),
-    [contractAddress, shopTokenIds]
-  );
-
-  const { data: shopInfoResults } = useReadContracts({
-    contracts: shopInfoCalls,
-    query: { enabled: shopTokenIds.length > 0 && !!contractAddress },
-  });
+  const contractTokenCount = 0;
+  const shopTokenIds: bigint[] = [];
+  const shopInfoResults: Array<{ status: 'success'; result: [number, bigint, bigint, bigint, bigint] } | { status: string }> | undefined = undefined;
 
   const shopItems = useMemo(() => {
     if (!shopInfoResults) return [];
@@ -289,56 +225,8 @@ export default function GameShopMobile() {
     return [...shopItems, ...comingSoonFromMeta];
   }, [shopItems]);
 
-  // User Vouchers
-  const { data: userOwnedCount } = useReadContract({
-    address: contractAddress,
-    abi: RewardABI,
-    functionName: 'ownedTokenCount',
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!contractAddress },
-  });
-
-  const userTokenCount = Number(userOwnedCount ?? 0);
-
-  const userTokenIdCalls = useMemo(
-    () =>
-      Array.from({ length: userTokenCount }, (_, i) => ({
-        address: contractAddress!,
-        abi: RewardABI as Abi,
-        functionName: 'tokenOfOwnerByIndex' as const,
-        args: [address!, BigInt(i)] as const,
-      })),
-    [contractAddress, address, userTokenCount]
-  );
-
-  const { data: userTokenIdResults } = useReadContracts({
-    contracts: userTokenIdCalls,
-    query: { enabled: userTokenCount > 0 && !!address && !!contractAddress },
-  });
-
-  const userVoucherIds = useMemo(() => {
-    return (
-      userTokenIdResults
-        ?.map((res) => (res.status === 'success' ? (res.result as bigint) : undefined))
-        .filter((id): id is bigint => id !== undefined && isVoucherToken(id)) ?? []
-    );
-  }, [userTokenIdResults]);
-
-  const voucherInfoCalls = useMemo(
-    () =>
-      userVoucherIds.map((tokenId) => ({
-        address: contractAddress!,
-        abi: RewardABI as Abi,
-        functionName: 'getCollectibleInfo' as const,
-        args: [tokenId] as const,
-      })),
-    [contractAddress, userVoucherIds]
-  );
-
-  const { data: voucherInfoResults } = useReadContracts({
-    contracts: voucherInfoCalls,
-    query: { enabled: userVoucherIds.length > 0 && !!contractAddress },
-  });
+  const userVoucherIds: bigint[] = [];
+  const voucherInfoResults: Array<{ status: 'success'; result: [number, bigint, bigint, bigint, bigint] }> | undefined = undefined;
 
   const myVouchers = useMemo(() => {
     if (!voucherInfoResults) return [];

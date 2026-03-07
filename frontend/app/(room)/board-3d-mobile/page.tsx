@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { apiClient } from "@/lib/api";
 import { simplifyAiTip } from "@/lib/simplifyAiTip";
 import { socketService } from "@/lib/socket";
@@ -22,7 +22,8 @@ import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { useGameTrades } from "@/hooks/useGameTrades";
 import { useAiBankruptcy } from "@/hooks/useAiBankruptcy";
 import { useMobilePropertyActions } from "@/hooks/useMobilePropertyActions";
-import { useGetGameByCode, useRewardBurnCollectible } from "@/context/ContractProvider";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
+import { useDojoRewardBurnCollectible } from "@/hooks/dojo/useDojoRewardBurnCollectible";
 import { Toaster, toast } from "react-hot-toast";
 import { isAIPlayer, getAiSlotFromPlayer } from "@/utils/gameUtils";
 import { MONOPOLY_STATS, BUILD_PRIORITY } from "@/components/game/constants";
@@ -284,7 +285,7 @@ function Board3DMobileContent() {
     strength: number;
     name: string;
   } | null>(null);
-  const { burn: burnCollectible, isSuccess: burnSuccess } = useRewardBurnCollectible();
+  const { burn: burnCollectible, isSuccess: burnSuccess } = useDojoRewardBurnCollectible();
   const [liveMovementOverride, setLiveMovementOverride] = useState<Record<number, number>>({});
   const [strategyRanThisTurn, setStrategyRanThisTurn] = useState(false);
   const [rollingDice, setRollingDice] = useState<{ die1: number; die2: number } | null>(null);
@@ -1873,7 +1874,7 @@ function Board3DMobileContent() {
     }
   }, [game?.id, game?.status, game?.players, me, refetchGame]);
 
-  const { data: contractGame } = useGetGameByCode(game?.code ?? "");
+  const { data: contractGame } = useGetGameByCode(game?.code ?? "", { enabled: !!game?.code });
 
   const handleDeclareBankruptcy = useCallback(async () => {
     if (!game?.id || !me) return;

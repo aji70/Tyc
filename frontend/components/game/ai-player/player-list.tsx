@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Game, Player } from "@/types/game";
 import { getPlayerSymbol } from "@/lib/types/symbol";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 
 interface PlayerListProps {
   game: Game;

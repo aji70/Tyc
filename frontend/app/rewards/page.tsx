@@ -749,7 +749,7 @@ export default function RewardAdminPanel() {
           >
             <p className="text-xl font-bold text-green-300 text-center">Transaction Sent!</p>
             <a
-              href={`https://celoscan.io/tx/${currentTxHash}`}
+              href={`https://sepolia.starkscan.co/tx/${currentTxHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="block mt-3 text-cyan-300 underline text-center"

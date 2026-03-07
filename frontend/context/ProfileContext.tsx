@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount } from '@starknet-react/core';
 import { getProfile, setProfile as saveProfile, type ProfileData } from '@/lib/profile-storage';
 
 type ProfileContextValue = {

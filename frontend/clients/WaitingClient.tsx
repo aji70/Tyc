@@ -3,8 +3,8 @@
 import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 /** Tournament match codes (e.g. T7-R0-M0) — players are already in the tournament, skip wallet registration gate. */
@@ -76,9 +76,9 @@ export default function GameWaitingClient() {
   const gameCode = searchParams.get("gameCode") ?? "";
 
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   const isTournamentLobby = isTournamentMatchCode(gameCode);
 

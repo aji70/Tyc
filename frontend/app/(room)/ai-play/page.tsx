@@ -10,13 +10,13 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { Game, GameProperty, Player, Property } from "@/types/game";
-import { useAccount } from "wagmi";
+import { useAccount } from "@starknet-react/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiResponse } from "@/types/api";
 import { useMediaQuery } from "@/components/useMediaQuery";
 
 import { LayoutGrid, Users, Loader2, AlertCircle } from "lucide-react";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 
 /** Shown when the game has ended and we have no game data (e.g. deep link to cancelled game). User goes home when they click. */
@@ -45,9 +45,9 @@ export default function GamePlayPage() {
   const guestUser = guestAuth?.guestUser ?? null;
   const isGuest = !!guestUser;
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   useEffect(() => {
     const code = searchParams.get("gameCode") || localStorage.getItem("gameCode");

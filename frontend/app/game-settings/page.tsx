@@ -5,8 +5,8 @@ import GameSettings from "@/components/settings/game-settings";
 import GameSttingsMobile from "@/components/settings/game-settings-mobile";
 
 import { useRouter } from "next/navigation";
-import { useAccount } from "wagmi";
-import { useIsRegistered } from "@/context/ContractProvider";
+import { useAccount } from "@starknet-react/core";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { Loader2, AlertCircle } from "lucide-react";
 
 export default function GameSettingsPage() {
@@ -15,9 +15,9 @@ export default function GameSettingsPage() {
   const { address } = useAccount();
 
   const {
-    data: isUserRegistered,
+    isRegisteredOnChain: isUserRegistered,
     isLoading: isRegisteredLoading,
-  } = useIsRegistered(address);
+  } = useIsRegisteredOnChain(address ?? undefined);
 
   // Loading while checking registration stapatus
   if (isRegisteredLoading) {

@@ -2,3 +2,7 @@ export { useDojoGameActions } from './useDojoGameActions';
 export { useDojoPlayerActions } from './useDojoPlayerActions';
 export { useDojoRewardActions } from './useDojoRewardActions';
 export { useDojoTokenActions } from './useDojoTokenActions';
+export { useDojoRewardBuyCollectible } from './useDojoRewardBuy';
+export { useDojoRewardBuyCollectibleBatch } from './useDojoRewardBuyBatch';
+export { useDojoRewardRedeemVoucher } from './useDojoRewardRedeemVoucher';
+export { useDojoRewardTokenAddresses } from './useDojoRewardTokenAddresses';

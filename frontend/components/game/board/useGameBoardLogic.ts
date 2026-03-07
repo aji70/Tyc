@@ -12,7 +12,8 @@ import {
 import { ApiResponse } from "@/types/api";
 import { apiClient } from "@/lib/api";
 import { socketService } from "@/lib/socket";
-import { useExitGame, useGetGameByCode } from "@/context/ContractProvider";
+import { useDojoExitGame } from "@/hooks/dojo/useDojoExitGame";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
 import {
   BOARD_SQUARES,
   ROLL_ANIMATION_MS,
@@ -108,7 +109,7 @@ export function useGameBoardLogic({
 
   const { data: contractGame } = useGetGameByCode(game.code);
   const onChainGameId = contractGame?.id;
-  const exitHook = useExitGame(onChainGameId ?? BigInt(0));
+  const exitHook = useDojoExitGame(onChainGameId ?? BigInt(0));
 
   const currentPlayerId = game.next_player_id ?? -1;
   const currentPlayer = players.find((p) => p.user_id === currentPlayerId);

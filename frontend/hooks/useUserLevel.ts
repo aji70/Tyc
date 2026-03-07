@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import type { Address } from "viem";
-import { useGetUser, useGetUsername } from "@/context/ContractProvider";
+import { useDojoGetUser, useDojoUsername } from "@/hooks/useAllDojoReads";
 import { getLevelFromActivity, type LevelInfo } from "@/lib/level";
 
 export interface UseUserLevelOptions {
@@ -25,10 +25,10 @@ export function useUserLevel(options: UseUserLevelOptions): {
 } {
   const { address, guestGameCount = 0, isGuest = false } = options;
 
-  const { data: fetchedUsername } = useGetUsername(address as Address | undefined);
+  const { username: fetchedUsername } = useDojoUsername(address ?? undefined);
   const username = typeof fetchedUsername === "string" ? fetchedUsername : undefined;
 
-  const { data: contractUser, isLoading: contractLoading } = useGetUser(username ?? undefined);
+  const { data: contractUser, isLoading: contractLoading } = useDojoGetUser(username ?? undefined);
 
   return useMemo(() => {
     if (isGuest) {

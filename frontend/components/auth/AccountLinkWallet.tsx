@@ -1,22 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
-import { useAccount, useChainId, useSignMessage } from "wagmi";
+import { shortString } from "starknet";
+import { useAccount, useNetwork } from "@starknet-react/core";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { Link2, Unlink, Loader2, Mail, Merge } from "lucide-react";
 
 /** Chain id to backend chain name */
 function chainIdToBackendChain(chainId: number): string {
   if (chainId === 137 || chainId === 80001) return "POLYGON";
-  if (chainId === 42220 || chainId === 44787) return "CELO";
+  if (chainId === 0x534e5f4d41494e || chainId === 0x534e5f5345504f4c4941) return "STARKNET";
   if (chainId === 8453 || chainId === 84531) return "BASE";
-  return "CELO";
+  return "STARKNET";
 }
 
 export default function AccountLinkWallet() {
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { signMessageAsync } = useSignMessage();
+  const { account, address, isConnected } = useAccount();
+  const { chain: networkChain } = useNetwork();
+  const chainId = networkChain?.id ?? 0;
   const auth = useGuestAuthOptional();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,12 +29,19 @@ export default function AccountLinkWallet() {
   const chain = chainIdToBackendChain(chainId);
 
   const handleLinkWallet = async () => {
-    if (!address || !guestUser?.is_guest || !auth?.linkWallet) return;
+    if (!address || !account || !guestUser?.is_guest || !auth?.linkWallet) return;
     setError(null);
     setLoading(true);
     try {
       const message = `Link Tycoon account: ${guestUser.username}`;
-      const signature = await signMessageAsync({ message });
+      const typedData = {
+        domain: { name: "Tycoon", chainId: String(chainId), version: "1" },
+        types: { Message: [{ name: "content", type: "felt252" }] },
+        primaryType: "Message" as const,
+        message: { content: shortString.encodeShortString(message.slice(0, 31)) },
+      };
+      const sig = await account.signMessage(typedData);
+      const signature = Array.isArray(sig) ? sig.map(String).join(",") : `${sig.r},${sig.s}`;
       const res = await auth.linkWallet({
         walletAddress: address,
         chain,

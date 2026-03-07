@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAccount, useChainId, useSignMessage } from "wagmi";
+import { shortString } from "starknet";
+import { useAccount, useNetwork } from "@starknet-react/core";
 import { useAppAuth } from "@/hooks/useAppAuth";
 import { useTournament } from "@/context/TournamentContext";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
@@ -15,9 +16,9 @@ const USDC_DECIMALS = 6;
 
 function chainIdToBackendChain(chainId: number): string {
   if (chainId === 137 || chainId === 80001) return "POLYGON";
-  if (chainId === 42220 || chainId === 44787) return "CELO";
+  if (chainId === 0x534e5f4d41494e || chainId === 0x534e5f5345504f4c4941) return "STARKNET";
   if (chainId === 8453 || chainId === 84531) return "BASE";
-  return "CELO";
+  return "STARKNET";
 }
 
 const PRIZE_SOURCES: { value: PrizeSource; label: string; description: string }[] = [
@@ -28,9 +29,9 @@ const PRIZE_SOURCES: { value: PrizeSource; label: string; description: string }[
 
 export default function CreateTournamentPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { signMessageAsync } = useSignMessage();
+  const { account, address, isConnected } = useAccount();
+  const { chain: networkChain } = useNetwork();
+  const chainId = networkChain?.id ?? 0;
   const { ready, authenticated, login } = useAppAuth();
   const guestAuth = useGuestAuthOptional();
   const guestUser = guestAuth?.guestUser ?? null;
@@ -42,7 +43,7 @@ export default function CreateTournamentPage() {
   const [step, setStep] = useState<"idle" | "signing_in" | "creating" | "success">("idle");
   const [createdResult, setCreatedResult] = useState<CreateTournamentResponse | null>(null);
   const [name, setName] = useState("");
-  const chain = appChain ?? "CELO";
+  const chain = appChain ?? "STARKNET";
   const [prizeSource, setPrizeSource] = useState<PrizeSource>("NO_POOL");
   const [maxPlayers, setMaxPlayers] = useState(32);
   const [minPlayers, setMinPlayers] = useState(2);
@@ -61,14 +62,21 @@ export default function CreateTournamentPage() {
   const canUseWallet = hasWallet && !!loginByWallet;
 
   const handleSignInWithWallet = async () => {
-    if (!address || !loginByWallet) return;
+    if (!address || !account || !loginByWallet) return;
     setError(null);
     setStep("signing_in");
     try {
       const message = `Sign in to Tycoon at ${Date.now()}`;
-      const signature = await signMessageAsync({ message });
+      const typedData = {
+        domain: { name: "Tycoon", chainId: String(chainId), version: "1" },
+        types: { Message: [{ name: "content", type: "felt252" }] },
+        primaryType: "Message" as const,
+        message: { content: shortString.encodeShortString(message.slice(0, 31)) },
+      };
+      const sig = await account.signMessage(typedData);
+      const sigStr = Array.isArray(sig) ? sig.map(String).join(",") : `${sig.r},${sig.s}`;
       const walletChain = chainIdToBackendChain(chainId);
-      const res = await loginByWallet({ address, chain: walletChain, message, signature });
+      const res = await loginByWallet({ address, chainName: walletChain, message, signature: sigStr });
       if (!res.success) {
         setError(res.message ?? "Sign in failed. Register first via Profile.");
         setStep("idle");
@@ -146,18 +154,18 @@ export default function CreateTournamentPage() {
   };
 
   function txExplorerUrl(chainName: string, txHash: string): string {
-    const chain = String(chainName).toUpperCase();
-    if (chain === "POLYGON") return `https://polygonscan.com/tx/${txHash}`;
-    if (chain === "BASE") return `https://basescan.org/tx/${txHash}`;
-    if (chain === "CELO") return `https://celoscan.io/tx/${txHash}`;
-    return `https://celoscan.io/tx/${txHash}`;
+    const c = String(chainName).toUpperCase();
+    if (c === "POLYGON") return `https://polygonscan.com/tx/${txHash}`;
+    if (c === "BASE") return `https://basescan.org/tx/${txHash}`;
+    if (c === "STARKNET") return `https://sepolia.starkscan.co/tx/${txHash}`;
+    return `https://sepolia.starkscan.co/tx/${txHash}`;
   }
 
   if (step === "success") {
     const onChain = createdResult?.created_on_chain ?? false;
     const onChainError = createdResult?.on_chain_error ?? null;
     const txHash = createdResult?.on_chain_tx_hash ?? null;
-    const chainName = createdResult?.chain ?? chain;
+    const chainDisplay = createdResult?.chain ?? chain;
     return (
       <div className="min-h-screen bg-gradient-to-b from-[#010F10] to-[#0E1415] text-white flex flex-col items-center justify-center px-4">
         <nav aria-label="Breadcrumb" className="absolute top-6 left-4 text-xs text-slate-500 flex items-center gap-1.5">
@@ -179,7 +187,7 @@ export default function CreateTournamentPage() {
         )}
         {txHash && (
           <a
-            href={txExplorerUrl(chainName, txHash)}
+            href={txExplorerUrl(chainDisplay, txHash)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-cyan-400 hover:text-cyan-300 text-sm underline mt-1"

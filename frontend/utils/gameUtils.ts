@@ -74,7 +74,7 @@ export const isAIPlayer = (player: Player) => {
   return username.includes("ai_") || username.includes("bot") || username.includes("computer");
 };
 
-/** Derive AI slot (2–8) from player username (e.g. AI_2 -> 2) for Celo agent registry. */
+/** Derive AI slot (2–8) from player username (e.g. AI_2 -> 2) for Starknet agent registry. */
 export function getAiSlotFromPlayer(player: Player): number | null {
   const username = player.username || "";
   const match = username.match(/ai_(\d+)/i);

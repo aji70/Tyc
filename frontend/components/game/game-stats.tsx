@@ -1,8 +1,8 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAccount, useChainId } from "wagmi";
-import { useGetUsername, useIsRegistered } from "@/context/ContractProvider";
+import { useAccount, useNetwork } from "@starknet-react/core";
+import { useDojoUsername, useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { toast } from "react-toastify";
 import { BarChart2, Trophy, Wallet, Crown, Users, Loader2 } from "lucide-react";
 import Image from "next/image";
@@ -13,9 +13,9 @@ import { ApiResponse } from "@/types/api";
 
 function chainIdToLeaderboardChain(chainId: number): string {
   if (chainId === 137 || chainId === 80001) return "POLYGON";
-  if (chainId === 42220 || chainId === 44787) return "CELO";
+  if (chainId === 0x534e5f4d41494e || chainId === 0x534e5f5345504f4c4941) return "STARKNET";
   if (chainId === 8453 || chainId === 84531) return "BASE";
-  return "CELO";
+  return "STARKNET";
 }
 
 interface PlayerStats {
@@ -37,9 +37,10 @@ interface LeaderboardEntry {
 const GameStats: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
-  const chainId = useChainId();
-  const { data: isUserRegistered, error: registeredError } = useIsRegistered(address);
-  const { data: username } = useGetUsername(address);
+  const { chain } = useNetwork();
+  const chainId = chain?.id ?? 0;
+  const { isRegisteredOnChain: isUserRegistered, error: registeredError } = useIsRegisteredOnChain(address ?? undefined);
+  const { username } = useDojoUsername(address ?? undefined);
   const [playerStats] = useState<PlayerStats>({
     totalGames: 42,
     wins: 15,

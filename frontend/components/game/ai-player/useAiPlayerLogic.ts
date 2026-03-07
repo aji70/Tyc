@@ -5,7 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Game, Player, Property, GameProperty } from "@/types/game";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api";
-import { useEndAIGameAndClaim, useGetGameByCode } from "@/context/ContractProvider";
+import { useDojoEndAiGameAndClaim } from "@/hooks/dojo/useDojoEndAiGameAndClaim";
+import { useGetGameByCode } from "@/hooks/useAllDojoReads";
 import { ApiResponse } from "@/types/api";
 import { getContractErrorMessage } from "@/lib/utils/contractErrors";
 import { useGameTrades } from "@/hooks/useGameTrades";
@@ -58,7 +59,7 @@ export function useAiPlayerLogic({
   const onChainGameId = contractGame?.id;
   const canClaimAIGameOnChain = !!(contractGame?.id && contractGame.id !== BigInt(0) && contractGame.ai);
 
-  const endGameHook = useEndAIGameAndClaim(
+  const endGameHook = useDojoEndAiGameAndClaim(
     onChainGameId ?? BigInt(0),
     endGameCandidate.position,
     BigInt(endGameCandidate.balance),
@@ -172,7 +173,7 @@ export function useAiPlayerLogic({
           try {
             favorability = calculateAiFavorability(sentTrade, properties ?? []);
 
-            // Optional Celo agent: try agent-registry first; fallback to built-in logic
+            // Optional Starknet agent: try agent-registry first; fallback to built-in logic
             const slot = getAiSlotFromPlayer(targetPlayer);
             if (slot != null) {
               try {
@@ -202,10 +203,10 @@ export function useAiPlayerLogic({
                   const actionLower = action.toLowerCase();
                   if (actionLower === "accept") {
                     decision = "accepted";
-                    remark = agentRes?.data?.useBuiltIn === false ? "Celo agent accepted. 🤖" : remark;
+                    remark = agentRes?.data?.useBuiltIn === false ? "Starknet agent accepted. 🤖" : remark;
                   } else if (actionLower === "decline") {
                     decision = "declined";
-                    remark = agentRes?.data?.useBuiltIn === false ? "Celo agent declined." : remark;
+                    remark = agentRes?.data?.useBuiltIn === false ? "Starknet agent declined." : remark;
                   } else if (actionLower === "counter") {
                     decision = "countered";
                     counterCashAdjustment = counterOffer?.cashAdjustment ?? 0;
