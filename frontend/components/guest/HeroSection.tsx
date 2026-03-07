@@ -12,7 +12,7 @@ import {
   useGetGameByCode,
 } from "@/context/ContractProvider";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
-import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
+import { useAllDojoReads, useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
@@ -30,14 +30,16 @@ const HeroSection: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [inputUsername, setInputUsername] = useState("");
-  const [localRegistered, setLocalRegistered] = useState(false);
   const [localUsername, setLocalUsername] = useState("");
   const [guestUsername, setGuestUsername] = useState("");
   const [guestPassword, setGuestPassword] = useState("");
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
+  const { getUsername } = useAllDojoReads();
   const { isRegisteredOnChain, isLoading: isOnChainLoading, error: onChainError } = useIsRegisteredOnChain(address ?? undefined);
+
+  const [onChainUsername, setOnChainUsername] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("[HeroSection] registration state", {
@@ -48,13 +50,24 @@ const HeroSection: React.FC = () => {
     });
   }, [address, isRegisteredOnChain, isOnChainLoading, onChainError]);
 
+  // Fetch on-chain username when registered on chain
   useEffect(() => {
-    if (address && isRegisteredOnChain) {
-      setLocalRegistered(true);
+    if (!address?.trim() || !isRegisteredOnChain) {
+      setOnChainUsername(null);
+      return;
     }
-  }, [address, isRegisteredOnChain]);
-
-  const isRegisteredLoading = isOnChainLoading;
+    let cancelled = false;
+    getUsername(address)
+      .then((name) => {
+        if (!cancelled && name) setOnChainUsername(name);
+      })
+      .catch(() => {
+        if (!cancelled) setOnChainUsername(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, isRegisteredOnChain, getUsername]);
 
   const { data: gameCode } = usePreviousGameCode(address);
 
@@ -116,9 +129,9 @@ const HeroSection: React.FC = () => {
   useEffect(() => {
     if (!address) {
       setUser(null);
-      setLocalRegistered(false);
       setLocalUsername("");
       setInputUsername("");
+      setOnChainUsername(null);
     }
   }, [address]);
 
@@ -158,26 +171,34 @@ const HeroSection: React.FC = () => {
     };
   }, [address]);
 
+  // Flow: check on-chain first, then backend
+  // fully-registered = on-chain AND backend | on-chain-only = on-chain, not backend | backend-only = backend, not on-chain | none = neither
   const registrationStatus = useMemo(() => {
-    if (address) {
-      if (localRegistered || isRegisteredOnChain) return "fully-registered";
-      return "none";
+    if (!address) {
+      if (guestUser) return "guest";
+      return "disconnected";
     }
-    if (guestUser) return "guest";
-    return "disconnected";
-  }, [address, localRegistered, isRegisteredOnChain, guestUser]);
+    if (isRegisteredOnChain && user) return "fully-registered";
+    if (isRegisteredOnChain && !user) return "on-chain-only";
+    if (!isRegisteredOnChain && user) return "backend-only";
+    return "none";
+  }, [address, isRegisteredOnChain, user, guestUser]);
 
+  // Welcome when we have any username (chain, backend, or input). Show name from best source.
   const displayUsername = useMemo(() => {
     if (guestUser) return guestUser.username;
-    return user?.username || localUsername || inputUsername || "Player";
-  }, [guestUser, user, localUsername, inputUsername]);
+    if (user?.username) return user.username;
+    if (onChainUsername) return onChainUsername;
+    if (localUsername) return localUsername;
+    return inputUsername || "Player";
+  }, [guestUser, user?.username, onChainUsername, localUsername, inputUsername]);
 
-  // Not on contract: if backend has user, prefill username once
+  // Prefill input when backend has user (backend-only case)
   useEffect(() => {
-    if (address && user?.username && !localRegistered) {
+    if (address && user?.username && registrationStatus === "backend-only") {
       setInputUsername((prev) => (prev.trim() ? prev : user!.username!.trim()));
     }
-  }, [address, user?.username, localRegistered]);
+  }, [address, user?.username, registrationStatus]);
 
   const { levelInfo } = useUserLevel({
     address: address ?? undefined,
@@ -185,14 +206,19 @@ const HeroSection: React.FC = () => {
     isGuest: !!guestUser,
   });
 
-  // Handle registration (on-chain + backend if needed)
+  // handleRegister: on-chain-only → backend only | backend-only → contract only | none → both
   const handleRegister = async () => {
     if (!address) {
       toast.error("Please connect your wallet");
       return;
     }
 
-    const finalUsername = inputUsername.trim();
+    const finalUsername =
+      registrationStatus === "on-chain-only"
+        ? (onChainUsername || inputUsername.trim())
+        : registrationStatus === "backend-only"
+          ? (user?.username?.trim() || inputUsername.trim())
+          : inputUsername.trim();
 
     if (!finalUsername) {
       toast.warn("Please enter a username");
@@ -200,14 +226,11 @@ const HeroSection: React.FC = () => {
     }
 
     setLoading(true);
-    const toastId = toast.loading("Processing registration...");
+    const toastId = toast.loading(registrationStatus === "on-chain-only" ? "Saving to backend..." : "Processing registration...");
 
     try {
-      if (!localRegistered) {
-        await registerPlayer(finalUsername);
-      }
-
-      if (!user) {
+      // on-chain-only: backend only (skip contract)
+      if (registrationStatus === "on-chain-only") {
         const res = await apiClient.post<ApiResponse>("/users", {
           username: finalUsername,
           address,
@@ -215,19 +238,31 @@ const HeroSection: React.FC = () => {
         });
         if (!res?.success) throw new Error("Failed to save user on backend");
         setUser({ username: finalUsername } as UserType);
+        toast.update(toastId, { render: "Welcome to Tycoon!", type: "success", isLoading: false, autoClose: 4000 });
+        router.refresh();
+        return;
       }
 
-      // Optimistic updates
-      setLocalRegistered(true);
+      // backend-only: contract only (skip backend)
+      if (registrationStatus === "backend-only") {
+        await registerPlayer(finalUsername);
+        toast.update(toastId, { render: "Welcome to Tycoon!", type: "success", isLoading: false, autoClose: 4000 });
+        router.refresh();
+        return;
+      }
+
+      // none: both contract and backend
+      await registerPlayer(finalUsername);
+      const res = await apiClient.post<ApiResponse>("/users", {
+        username: finalUsername,
+        address,
+        chain: "Starknet",
+      });
+      if (!res?.success) throw new Error("Failed to save user on backend");
+      setUser({ username: finalUsername } as UserType);
       setLocalUsername(finalUsername);
 
-      toast.update(toastId, {
-        render: "Welcome to Tycoon!",
-        type: "success",
-        isLoading: false,
-        autoClose: 4000,
-      });
-
+      toast.update(toastId, { render: "Welcome to Tycoon!", type: "success", isLoading: false, autoClose: 4000 });
       router.refresh();
     } catch (err: any) {
       if (
@@ -235,34 +270,21 @@ const HeroSection: React.FC = () => {
         err?.message?.includes("User rejected") ||
         err?.message?.includes("User denied")
       ) {
-        toast.update(toastId, {
-          render: "Transaction cancelled",
-          type: "info",
-          isLoading: false,
-          autoClose: 3500,
-        });
+        toast.update(toastId, { render: "Transaction cancelled", type: "info", isLoading: false, autoClose: 3500 });
         return;
       }
 
-      // Contract can revert with "already registered"; backend may return 409. In both cases user is registered on-chain — show Welcome.
       const isAlreadyExists =
         err?.status === 409 ||
         err?.response?.status === 409 ||
         /already exists|already registered|username.*taken|user.*exists/i.test(String(err?.message ?? err?.shortMessage ?? ""));
 
       if (isAlreadyExists) {
-        setLocalRegistered(true);
-        setLocalUsername(finalUsername);
         try {
           const res = await apiClient.get<ApiResponse>(`/users/by-address/${address}?chain=Starknet`);
           if (res?.success && res?.data) setUser(res.data as UserType);
         } catch (_) {}
-        toast.update(toastId, {
-          render: "Welcome back!",
-          type: "success",
-          isLoading: false,
-          autoClose: 4000,
-        });
+        toast.update(toastId, { render: "Welcome back!", type: "success", isLoading: false, autoClose: 4000 });
         router.refresh();
         return;
       }
@@ -272,13 +294,7 @@ const HeroSection: React.FC = () => {
       if (err?.shortMessage) message = err.shortMessage;
       if (err?.message?.includes("insufficient funds")) message = "Insufficient gas funds";
       if (typeof err?.message === "string" && err.message) message = err.message;
-
-      toast.update(toastId, {
-        render: message,
-        type: "error",
-        isLoading: false,
-        autoClose: 6000,
-      });
+      toast.update(toastId, { render: message, type: "error", isLoading: false, autoClose: 6000 });
     } finally {
       setLoading(false);
     }
@@ -337,8 +353,8 @@ const handleContinuePrevious = () => {
       </div>
 
       <main className="w-full h-full absolute top-0 left-0 z-2 bg-transparent flex flex-col lg:justify-center items-center gap-1">
-        {/* Welcome Message + Level */}
-        {(registrationStatus === "fully-registered" || registrationStatus === "guest") && !loading && (
+        {/* Welcome Message + Level - show when we have username (fully-registered, on-chain-only, backend-only) or guest */}
+        {(registrationStatus === "fully-registered" || registrationStatus === "on-chain-only" || registrationStatus === "backend-only" || registrationStatus === "guest") && !loading && (
           <div className="mt-20 md:mt-28 lg:mt-0 flex flex-col items-center gap-2">
             <p className="font-orbitron lg:text-[24px] md:text-[20px] text-[16px] font-[700] text-[#00F0FF] text-center">
               Welcome back, {displayUsername}!
@@ -433,7 +449,7 @@ const handleContinuePrevious = () => {
         </div>
 
         <div className="z-1 w-full flex flex-col justify-center items-center mt-6 gap-4">
-          {/* Wallet: username input for new users (only after we know they're not registered) */}
+          {/* Username input only when neither on chain nor backend */}
           {address && registrationStatus === "none" && !loading && !isOnChainLoading && (
             <input
               type="text"
@@ -461,8 +477,8 @@ const handleContinuePrevious = () => {
             </div>
           )}
 
-          {/* "Let's Go!" for wallet users (backend-only or none; hide while checking on-chain) */}
-          {address && registrationStatus !== "fully-registered" && !loading && !isOnChainLoading && (
+          {/* Let's Go: on-chain-only (backend) | backend-only (contract) | none (both) */}
+          {address && (registrationStatus === "on-chain-only" || registrationStatus === "backend-only" || registrationStatus === "none") && !loading && !isOnChainLoading && (
             <button
               onClick={handleRegister}
               disabled={
@@ -585,28 +601,6 @@ const handleContinuePrevious = () => {
                   className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs"
                 >
                   Sign out (guest)
-                </button>
-              )}
-
-              {/* Discreet: on contract but not on backend — prompt to save profile */}
-              {address && localRegistered && !user && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const name = localUsername || inputUsername.trim();
-                    if (!name) return;
-                    try {
-                      const res = await apiClient.post<ApiResponse>("/users", {
-                        username: name,
-                        address,
-                        chain: "Starknet",
-                      });
-                      if (res?.success) setUser({ username: name } as UserType);
-                    } catch (_) {}
-                  }}
-                  className="text-[#869298] hover:text-[#00F0FF] font-dmSans text-xs underline underline-offset-1"
-                >
-                  Save profile to backend
                 </button>
               )}
 
