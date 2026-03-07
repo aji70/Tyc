@@ -31,6 +31,39 @@ const BUILDABLE_POSITIONS = new Set([
   1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 28, 31, 32, 34, 37, 39,
 ]);
 
+// Monopoly color groups (match BoardScene); used for property building height.
+const COLOR_GROUPS: Record<string, number[]> = {
+  brown: [1, 3],
+  lightblue: [6, 8, 9],
+  pink: [11, 13, 14],
+  orange: [16, 18, 19],
+  red: [21, 23, 24],
+  yellow: [26, 27, 29],
+  green: [31, 32, 34],
+  darkblue: [37, 39],
+  railroad: [5, 15, 25, 35],
+  utility: [12, 28],
+};
+
+const GROUP_HEIGHT: Record<string, number> = {
+  brown: 0.14,
+  lightblue: 0.16,
+  pink: 0.18,
+  orange: 0.2,
+  red: 0.22,
+  yellow: 0.2,
+  green: 0.24,
+  darkblue: 0.26,
+};
+
+function getGroupIndex(id: number): { group: string; index: number } {
+  for (const [group, ids] of Object.entries(COLOR_GROUPS)) {
+    const idx = ids.indexOf(id);
+    if (idx >= 0) return { group, index: idx };
+  }
+  return { group: "other", index: 0 };
+}
+
 function hexToThreeColor(hex: string): THREE.Color {
   const n = parseInt(hex.replace(/^#/, ""), 16);
   return new THREE.Color(n);
@@ -114,10 +147,9 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
   }
 
   const labelGeom = new THREE.PlaneGeometry(TILE_SIZE * 0.95, LABEL_HEIGHT);
-  const houseGeom = new THREE.BoxGeometry(HOUSE_SIZE, HOUSE_HEIGHT, HOUSE_SIZE);
-  const hotelGeom = new THREE.BoxGeometry(HOTEL_SIZE, HOTEL_HEIGHT, HOTEL_SIZE);
-  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.6, metalness: 0.1 });
-  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6, metalness: 0.1 });
+  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.75, metalness: 0.1 });
+  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.7, metalness: 0.1 });
+  const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.85, metalness: 0.05 });
 
   const tileMeshes: THREE.Mesh[] = [];
   if (tileMeshesRef) tileMeshesRef.current = [];
@@ -147,29 +179,141 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
     scene.add(labelMesh);
     if (labelMeshesRef) labelMeshesRef.current.push(labelMesh);
 
-    if (!BUILDABLE_POSITIONS.has(i)) continue;
-    const level = developmentByPropertyId[i] ?? 0;
-    if (level === 0) continue;
+    const size = TILE_SIZE;
 
-    const baseY = TILE_HEIGHT + (level === 5 ? HOTEL_HEIGHT / 2 : HOUSE_HEIGHT / 2);
-    if (level === 5) {
-      const hotel = new THREE.Mesh(hotelGeom, hotelMaterial);
-      hotel.position.set(x, baseY, z);
-      hotel.castShadow = true;
-      scene.add(hotel);
-    } else {
-      const step = 0.26;
-      const offsets: [number, number][] =
-        level === 1 ? [[0, 0]] :
-        level === 2 ? [[-step / 2, 0], [step / 2, 0]] :
-        level === 3 ? [[-step / 2, 0], [step / 2, 0], [0, step / 2]] :
-        [[-step / 2, -step / 2], [step / 2, -step / 2], [-step / 2, step / 2], [step / 2, step / 2]];
-      for (let h = 0; h < level; h++) {
-        const [ox, oz] = offsets[h];
-        const house = new THREE.Mesh(houseGeom, houseMaterial);
-        house.position.set(x + ox, baseY, z + oz);
-        house.castShadow = true;
-        scene.add(house);
+    // ---- CORNERS: GO, Jail, Free Parking, Go to Jail ----
+    if (i === 0) {
+      const signPost = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), new THREE.MeshStandardMaterial({ color: 0x27ae60 }));
+      signPost.position.set(x, 0.14, z);
+      signPost.castShadow = true;
+      scene.add(signPost);
+      const signBoard = new THREE.Mesh(new THREE.BoxGeometry(size * 0.65, 0.1, 0.04), new THREE.MeshStandardMaterial({ color: 0x2ecc71 }));
+      signBoard.position.set(x, 0.28, z);
+      signBoard.castShadow = true;
+      scene.add(signBoard);
+    } else if (i === 10) {
+      const jailBase = new THREE.Mesh(new THREE.BoxGeometry(size * 0.7, 0.32, size * 0.7), new THREE.MeshStandardMaterial({ color: 0x5d6d7e }));
+      jailBase.position.set(x, 0.18, z);
+      jailBase.castShadow = true;
+      scene.add(jailBase);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(size * 0.76, 0.06, size * 0.76), new THREE.MeshStandardMaterial({ color: 0x4a4a4a }));
+      roof.position.set(x, 0.38, z);
+      roof.castShadow = true;
+      scene.add(roof);
+      const barW = 0.03;
+      const barH = 0.28;
+      for (let b = -2; b <= 2; b++) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(barW, barH, barW), new THREE.MeshStandardMaterial({ color: 0x2c3e50 }));
+        bar.position.set(x + b * 0.14, 0.18, z + size * 0.32);
+        bar.castShadow = true;
+        scene.add(bar);
+      }
+    } else if (i === 20) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.06), new THREE.MeshStandardMaterial({ color: 0x5d4037 }));
+      post.position.set(x, 0.12, z);
+      post.castShadow = true;
+      scene.add(post);
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(size * 0.5, 0.08, 0.04), new THREE.MeshStandardMaterial({ color: 0x3498db }));
+      sign.position.set(x, 0.26, z);
+      sign.castShadow = true;
+      scene.add(sign);
+    } else if (i === 30) {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(size * 0.75, 0.1, size * 0.5), new THREE.MeshStandardMaterial({ color: 0x3d3d3d }));
+      base.position.set(x, 0.08, z);
+      base.castShadow = true;
+      scene.add(base);
+      const gateL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), new THREE.MeshStandardMaterial({ color: 0x2c3e50 }));
+      gateL.position.set(x - size * 0.22, 0.28, z);
+      gateL.castShadow = true;
+      scene.add(gateL);
+      const gateR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), new THREE.MeshStandardMaterial({ color: 0x2c3e50 }));
+      gateR.position.set(x + size * 0.22, 0.28, z);
+      gateR.castShadow = true;
+      scene.add(gateR);
+      const arch = new THREE.Mesh(new THREE.BoxGeometry(size * 0.6, 0.1, 0.14), new THREE.MeshStandardMaterial({ color: 0xc0392b }));
+      arch.position.set(x, 0.52, z);
+      arch.castShadow = true;
+      scene.add(arch);
+      const barW = 0.022;
+      for (let b = -2; b <= 2; b++) {
+        const goBar = new THREE.Mesh(new THREE.BoxGeometry(barW, 0.42, 0.08), new THREE.MeshStandardMaterial({ color: 0x4a4a4a }));
+        goBar.position.set(x + b * 0.14, 0.28, z);
+        goBar.castShadow = true;
+        scene.add(goBar);
+      }
+    }
+    // ---- RAILROADS ----
+    else if (i === 5 || i === 15 || i === 25 || i === 35) {
+      const platform = new THREE.Mesh(new THREE.BoxGeometry(size * 0.85, 0.08, size * 0.5), new THREE.MeshStandardMaterial({ color: 0x7f8c8d }));
+      platform.position.set(x, 0.06, z);
+      platform.castShadow = true;
+      scene.add(platform);
+      const station = new THREE.Mesh(new THREE.BoxGeometry(size * 0.45, 0.25, size * 0.4), new THREE.MeshStandardMaterial({ color: 0xd5d8dc }));
+      station.position.set(x, 0.22, z);
+      station.castShadow = true;
+      scene.add(station);
+      const awning = new THREE.Mesh(new THREE.BoxGeometry(size * 0.9, 0.04, size * 0.35), new THREE.MeshStandardMaterial({ color: 0x27ae60 }));
+      awning.position.set(x, 0.38, z);
+      awning.castShadow = true;
+      scene.add(awning);
+      const engine = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.18), new THREE.MeshStandardMaterial({ color: 0xc0392b }));
+      engine.position.set(x - size * 0.2, 0.14, z);
+      engine.castShadow = true;
+      scene.add(engine);
+      const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.06), new THREE.MeshStandardMaterial({ color: 0x4a4a4a }));
+      chimney.position.set(x - size * 0.2, 0.24, z);
+      chimney.castShadow = true;
+      scene.add(chimney);
+      const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.16), new THREE.MeshStandardMaterial({ color: 0x2980b9 }));
+      carriage.position.set(x + size * 0.15, 0.12, z);
+      carriage.castShadow = true;
+      scene.add(carriage);
+    }
+    // ---- PROPERTIES: terraced building + pitched roof + houses/hotel on top ----
+    else if (BUILDABLE_POSITIONS.has(i)) {
+      const { group } = getGroupIndex(i);
+      const groupHeight = GROUP_HEIGHT[group] ?? 0.18;
+      const bodyH = groupHeight * 0.65;
+      const roofH = groupHeight * 0.35;
+      const bodyMat = getMaterial(colorSpec);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(size * 0.65, bodyH, size * 0.65), bodyMat);
+      body.position.set(x, 0.02 + bodyH / 2, z);
+      body.castShadow = true;
+      scene.add(body);
+      const roofW = size * 0.48;
+      const roofSlant1 = new THREE.Mesh(new THREE.BoxGeometry(size * 0.72, roofH, roofW), roofMaterial);
+      roofSlant1.position.set(x, 0.02 + bodyH + roofH / 2, z - roofW * 0.15);
+      roofSlant1.rotation.x = Math.PI / 6;
+      roofSlant1.castShadow = true;
+      scene.add(roofSlant1);
+      const roofSlant2 = new THREE.Mesh(new THREE.BoxGeometry(size * 0.72, roofH, roofW), roofMaterial);
+      roofSlant2.position.set(x, 0.02 + bodyH + roofH / 2, z + roofW * 0.15);
+      roofSlant2.rotation.x = -Math.PI / 6;
+      roofSlant2.castShadow = true;
+      scene.add(roofSlant2);
+
+      const development = developmentByPropertyId[i] ?? 0;
+      const baseY = 0.02 + bodyH + roofH;
+      const houseH = 0.08;
+      const houseW = size * 0.2;
+      const gap = 0.04;
+      const housePositions: [number, number][] = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+      if (development >= 5) {
+        const hotelH = 0.2;
+        const hotel = new THREE.Mesh(new THREE.BoxGeometry(size * 0.35, hotelH, size * 0.35), hotelMaterial);
+        hotel.position.set(x, baseY + hotelH / 2, z);
+        hotel.castShadow = true;
+        scene.add(hotel);
+      } else if (development >= 1 && development <= 4) {
+        for (let h = 0; h < development; h++) {
+          const [sx, sz] = housePositions[h];
+          const hx = x + sx * (houseW / 2 + gap / 2);
+          const hz = z + sz * (houseW / 2 + gap / 2);
+          const house = new THREE.Mesh(new THREE.BoxGeometry(houseW, houseH, houseW), houseMaterial);
+          house.position.set(hx, baseY + houseH / 2, hz);
+          house.castShadow = true;
+          scene.add(house);
+        }
       }
     }
   }
