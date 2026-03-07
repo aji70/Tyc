@@ -4,5 +4,6 @@ export { useDojoRewardActions } from './useDojoRewardActions';
 export { useDojoTokenActions } from './useDojoTokenActions';
 export { useDojoRewardBuyCollectible } from './useDojoRewardBuy';
 export { useDojoRewardBuyCollectibleBatch } from './useDojoRewardBuyBatch';
+export { useDojoRewardBurnCollectible } from './useDojoRewardBurnCollectible';
 export { useDojoRewardRedeemVoucher } from './useDojoRewardRedeemVoucher';
 export { useDojoRewardTokenAddresses } from './useDojoRewardTokenAddresses';

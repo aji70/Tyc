@@ -23,6 +23,7 @@ import { useDojoRewardBurnCollectible } from "@/hooks/dojo/useDojoRewardBurnColl
 import { usePreventDoubleSubmit } from "@/hooks/usePreventDoubleSubmit";
 import { useGameTrades } from "@/hooks/useGameTrades";
 import TradeAlertPill from "@/components/game/TradeAlertPill";
+import CollectibleInventoryBar from "@/components/collectibles/collectibles-invetory";
 import { Toaster, toast } from "react-hot-toast";
 import { CardModal } from "@/components/game/modals/cards";
 import { BankruptcyModal } from "@/components/game/modals/bankruptcy";
@@ -67,11 +68,6 @@ const Canvas = dynamic(
 );
 const BoardScene = dynamic(
   () => import("@/components/game/board3d/BoardScene").then((m) => m.default),
-  { ssr: false }
-);
-
-const CollectibleInventoryBar = dynamic(
-  () => import("@/components/collectibles/collectibles-invetory").then((m) => m.default),
   { ssr: false }
 );
 
