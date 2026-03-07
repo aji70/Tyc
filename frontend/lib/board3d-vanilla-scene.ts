@@ -4,7 +4,6 @@
  */
 import * as THREE from "three";
 import { getPosition3D } from "@/components/game/board3d/positions";
-import { BOARD_SQUARE_NAMES } from "@/components/game/board3d/squareNames";
 import type { Property } from "@/types/game";
 
 export const TILE_SIZE = 0.9;
@@ -81,28 +80,6 @@ export function getColorSpec(prop: Property): string {
   return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
 }
 
-export function makeLabelTexture(name: string): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  const w = 256;
-  const h = 64;
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#0a0a0a";
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#444";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(2, 2, w - 4, h - 4);
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 11px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(name.length > 18 ? name.slice(0, 16) + "…" : name, w / 2, h / 2);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
-}
-
 export type BuildBoardSceneOptions = {
   properties: Property[];
   developmentByPropertyId?: Record<number, number>;
@@ -146,7 +123,6 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
     return materialCache.get(key)!;
   }
 
-  const labelGeom = new THREE.PlaneGeometry(TILE_SIZE * 0.95, LABEL_HEIGHT);
   const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x27ae60, roughness: 0.75, metalness: 0.1 });
   const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.7, metalness: 0.1 });
   const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.85, metalness: 0.05 });
@@ -166,18 +142,6 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
     scene.add(mesh);
     tileMeshes.push(mesh);
     if (tileMeshesRef) tileMeshesRef.current.push(mesh);
-
-    const name = prop?.name ?? BOARD_SQUARE_NAMES[i] ?? `Square ${i}`;
-    const labelMat = new THREE.MeshBasicMaterial({
-      map: makeLabelTexture(name),
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const labelMesh = new THREE.Mesh(labelGeom, labelMat);
-    labelMesh.position.set(x, LABEL_Y_OFFSET + LABEL_HEIGHT / 2, z);
-    scene.add(labelMesh);
-    if (labelMeshesRef) labelMeshesRef.current.push(labelMesh);
 
     const size = TILE_SIZE;
 

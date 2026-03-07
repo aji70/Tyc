@@ -11,6 +11,7 @@ import {
 } from "@/lib/board3d-iframe-messages";
 import { buildBoardScene } from "@/lib/board3d-vanilla-scene";
 import { getPosition3D } from "@/components/game/board3d/positions";
+import { getSquareName } from "@/components/game/board3d/squareNames";
 
 const BOARD_3D_MESSAGE_SOURCE = "tycoon-board3d-canvas";
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
@@ -23,10 +24,12 @@ function postToParent(msg: Board3DMessageFromCanvas) {
 
 export default function Board3DCanvasPage() {
   const [state, setState] = useState<Board3DCanvasState | null>(null);
+  const [hoveredTile, setHoveredTile] = useState<{ propertyId: number; name: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const labelMeshesRef = useRef<THREE.Mesh[]>([]);
   const tileMeshesRef = useRef<THREE.Mesh[]>([]);
   const frameRef = useRef<number>(0);
@@ -88,6 +91,7 @@ export default function Board3DCanvasPage() {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(...CAMERA_POSITION);
     camera.lookAt(new THREE.Vector3(...CAMERA_LOOK_AT));
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -113,11 +117,27 @@ export default function Board3DCanvasPage() {
     onResize();
     window.addEventListener("resize", onResize);
 
+    const properties = state.properties as Property[];
     function onPointerMove(e: PointerEvent) {
       if (!container) return;
       const rect = container.getBoundingClientRect();
       mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      if (cameraRef.current && tileMeshesRef.current.length > 0) {
+        raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+        const hits = raycasterRef.current.intersectObjects(tileMeshesRef.current);
+        const hit = hits[0];
+        if (hit?.object?.userData?.propertyId != null) {
+          const propertyId = hit.object.userData.propertyId as number;
+          const prop = properties[propertyId];
+          const name = (prop as Property)?.name ?? getSquareName(propertyId);
+          setHoveredTile({ propertyId, name });
+        } else {
+          setHoveredTile(null);
+        }
+      } else {
+        setHoveredTile(null);
+      }
     }
     function onPointerDown() {
       if (!camera || tileMeshesRef.current.length === 0) return;
@@ -129,13 +149,18 @@ export default function Board3DCanvasPage() {
         onSquareClick(propertyId);
       }
     }
+    function onPointerLeave() {
+      setHoveredTile(null);
+    }
     container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerleave", onPointerLeave);
     container.addEventListener("pointerdown", onPointerDown);
 
     const cleanupFns: (() => void)[] = [
       () => window.removeEventListener("resize", onResize),
       () => {
         container.removeEventListener("pointermove", onPointerMove);
+        container.removeEventListener("pointerleave", onPointerLeave);
         container.removeEventListener("pointerdown", onPointerDown);
       },
       () => cancelAnimationFrame(frameRef.current),
@@ -160,7 +185,6 @@ export default function Board3DCanvasPage() {
     function animate() {
       frameRef.current = requestAnimationFrame(animate);
       controls.update();
-      labelMeshesRef.current.forEach((m) => m.lookAt(camera.position));
       renderer.render(scene, camera);
     }
     animate();
@@ -170,6 +194,7 @@ export default function Board3DCanvasPage() {
       sceneRef.current = null;
       rendererRef.current = null;
       controlsRef.current = null;
+      cameraRef.current = null;
       labelMeshesRef.current = [];
       tileMeshesRef.current = [];
     };
@@ -201,7 +226,19 @@ export default function Board3DCanvasPage() {
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#010F10] flex flex-col">
-      <div ref={containerRef} className="flex-1 min-h-0 w-full" />
+      <div ref={containerRef} className="flex-1 min-h-0 w-full relative" />
+      {hoveredTile && (
+        <div
+          className="pointer-events-none fixed z-50 px-3 py-1.5 rounded-lg bg-black/80 text-white text-sm font-medium shadow-lg border border-cyan-500/30 max-w-[200px] truncate"
+          style={{
+            left: "50%",
+            bottom: "4rem",
+            transform: "translateX(-50%)",
+          }}
+        >
+          {hoveredTile.name}
+        </div>
+      )}
       {showRollUi && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
           <button
