@@ -1,11 +1,15 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getPosition3D } from "@/components/game/board3d/positions";
-import { BOARD_SQUARE_NAMES } from "@/components/game/board3d/squareNames";
+import { BOARD_SQUARE_NAMES, getSquareName } from "@/components/game/board3d/squareNames";
 import { useStarknetWallet } from "@/context/starknet-wallet-provider";
+import { apiClient } from "@/lib/api";
+import { ApiResponse } from "@/types/api";
+import type { Property } from "@/types/game";
 
 /**
  * Skeletal 3D Monopoly-style board using vanilla Three.js only (no R3F).
@@ -34,7 +38,7 @@ const HOUSE_HEIGHT = 0.18;
 const HOTEL_SIZE = 0.28;
 const HOTEL_HEIGHT = 0.26;
 
-/** Property/tile colors. Chance, Community Chest, and Tax use unique colors. */
+/** Property/tile colors. Chance, Community Chest, and Tax use unique colors. Fallback when API has no data. */
 const TILE_COLORS: { id: number; color: string }[] = [
   { id: 0, color: "#2ecc71" }, { id: 1, color: "#8B4513" }, { id: 2, color: "community_chest" }, { id: 3, color: "#8B4513" }, { id: 4, color: "income_tax" },
   { id: 5, color: "railroad" }, { id: 6, color: "#87CEEB" }, { id: 7, color: "chance" }, { id: 8, color: "#87CEEB" }, { id: 9, color: "#87CEEB" },
@@ -45,6 +49,46 @@ const TILE_COLORS: { id: number; color: string }[] = [
   { id: 30, color: "#e74c3c" }, { id: 31, color: "#228B22" }, { id: 32, color: "#228B22" }, { id: 33, color: "community_chest" }, { id: 34, color: "#228B22" },
   { id: 35, color: "railroad" }, { id: 36, color: "chance" }, { id: 37, color: "#0000CD" }, { id: 38, color: "luxury_tax" }, { id: 39, color: "#0000CD" },
 ];
+
+/** Fetch board properties from backend (same as other 3D boards). Fallback to static data when API fails or returns < 40. */
+function useBoardProperties(): { properties: Property[]; isLoading: boolean } {
+  const { data: apiProperties = [], isLoading } = useQuery<Property[]>({
+    queryKey: ["properties"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse>("/properties");
+      return res.data?.success ? res.data.data : [];
+    },
+    staleTime: Infinity,
+  });
+
+  const fallback = useMemo(() => {
+    return TILE_COLORS.map((t) => ({
+      id: t.id,
+      type: t.color === "chance" ? "chance" : t.color === "community_chest" ? "community_chest" : t.color === "income_tax" ? "income_tax" : t.color === "luxury_tax" ? "luxury_tax" : t.color === "railroad" ? "property" : t.color === "utility" ? "property" : "property",
+      name: getSquareName(t.id),
+      group_id: Math.floor(t.id / 10),
+      position: "bottom" as const,
+      grid_row: 11,
+      grid_col: 11,
+      price: 0,
+      rent_site_only: 0,
+      rent_one_house: 0,
+      rent_two_houses: 0,
+      rent_three_houses: 0,
+      rent_four_houses: 0,
+      rent_hotel: 0,
+      cost_of_house: 0,
+      is_mortgaged: false,
+      color: t.color,
+    })) as Property[];
+  }, []);
+
+  if (apiProperties.length >= 40) {
+    const sorted = [...apiProperties].sort((a, b) => a.id - b.id);
+    return { properties: sorted, isLoading: false };
+  }
+  return { properties: fallback, isLoading };
+}
 
 function hexToThreeColor(hex: string): THREE.Color {
   const n = parseInt(hex.replace(/^#/, ""), 16);
@@ -82,7 +126,16 @@ function makeLabelTexture(name: string): THREE.CanvasTexture {
   return tex;
 }
 
-function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene {
+/** Resolve tile color from backend property: use type for chance/chest/tax, else property.color. */
+function getColorSpec(prop: Property): string {
+  if (prop.type === "chance") return "chance";
+  if (prop.type === "community_chest") return "community_chest";
+  if (prop.type === "income_tax") return "income_tax";
+  if (prop.type === "luxury_tax") return "luxury_tax";
+  return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
+}
+
+function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }, properties: Property[]): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x010f10);
 
@@ -124,15 +177,16 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
   const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6, metalness: 0.1 });
 
   for (let i = 0; i < 40; i++) {
+    const prop = properties[i];
     const [x, , z] = getPosition3D(i);
-    const colorSpec = TILE_COLORS[i]?.color ?? "#1a3a3e";
+    const colorSpec = prop ? getColorSpec(prop) : TILE_COLORS[i]?.color ?? "#1a3a3e";
     const mat = getMaterial(colorSpec);
     const mesh = new THREE.Mesh(tileGeom, mat);
     mesh.position.set(x, TILE_HEIGHT / 2, z);
     mesh.receiveShadow = true;
     scene.add(mesh);
 
-    const name = BOARD_SQUARE_NAMES[i] ?? `Square ${i}`;
+    const name = prop?.name ?? BOARD_SQUARE_NAMES[i] ?? `Square ${i}`;
     const labelMat = new THREE.MeshBasicMaterial({
       map: makeLabelTexture(name),
       transparent: true,
@@ -176,6 +230,7 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
 }
 
 export default function Board3DVanillaPage() {
+  const { properties, isLoading } = useBoardProperties();
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -185,10 +240,10 @@ export default function Board3DVanillaPage() {
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || properties.length < 40) return;
 
     labelMeshesRef.current = [];
-    const scene = buildBoardScene(labelMeshesRef);
+    const scene = buildBoardScene(labelMeshesRef, properties);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
@@ -240,7 +295,7 @@ export default function Board3DVanillaPage() {
       controlsRef.current = null;
       labelMeshesRef.current = [];
     };
-  }, []);
+  }, [properties]);
 
   const { account, connectors, connectWallet, disconnectWallet } = useStarknetWallet();
   const isConnected = !!account;
@@ -270,7 +325,14 @@ export default function Board3DVanillaPage() {
           )}
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 min-h-0 w-full" />
+      {isLoading ? (
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center gap-2 text-slate-400">
+          <div className="w-8 h-8 rounded-full border-2 border-cyan-500/50 border-t-cyan-400 animate-spin" />
+          <p className="text-sm">Loading board…</p>
+        </div>
+      ) : (
+        <div ref={containerRef} className="flex-1 min-h-0 w-full" />
+      )}
     </div>
   );
 }
