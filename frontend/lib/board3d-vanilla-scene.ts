@@ -114,8 +114,8 @@ function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: st
   return tex;
 }
 
-/** Create a texture with the emoji drawn on a circular background (for player token sprites). */
-function makeEmojiTexture(emoji: string, isCurrent: boolean): THREE.CanvasTexture {
+/** Create a texture with the emoji only (no background) for player token sprites. */
+function makeEmojiTexture(emoji: string, _isCurrent: boolean): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -123,14 +123,6 @@ function makeEmojiTexture(emoji: string, isCurrent: boolean): THREE.CanvasTextur
   const ctx = canvas.getContext("2d")!;
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = isCurrent ? "rgba(34, 211, 238, 0.5)" : "rgba(0,0,0,0.6)";
-  ctx.fill();
-  ctx.strokeStyle = isCurrent ? "#22d3ee" : "rgba(255,255,255,0.5)";
-  ctx.lineWidth = isCurrent ? 3 : 2;
-  ctx.stroke();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = "32px system-ui, sans-serif";
