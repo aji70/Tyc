@@ -18,6 +18,21 @@ const LABEL_Y_OFFSET = TILE_HEIGHT + 0.02;
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
 const CAMERA_LOOK_AT: [number, number, number] = [0, 0, 0];
 
+/** Street properties (buildable); excludes corners, Chance, Community Chest, tax, railroads, utilities. */
+const BUILDABLE_POSITIONS = new Set([
+  1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 28, 31, 32, 34, 37, 39,
+]);
+
+/** Demo development level per position: 0 = none, 1–4 = houses, 5 = hotel. */
+const DEMO_DEVELOPMENT: Record<number, number> = {
+  1: 2, 3: 1, 6: 1, 8: 3, 11: 1, 16: 4, 18: 2, 21: 1, 24: 3, 27: 1, 31: 2, 34: 1, 37: 5, 39: 2,
+};
+
+const HOUSE_SIZE = 0.14;
+const HOUSE_HEIGHT = 0.12;
+const HOTEL_SIZE = 0.22;
+const HOTEL_HEIGHT = 0.2;
+
 function makeLabelTexture(name: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   const w = 256;
@@ -59,6 +74,11 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
 
   const labelGeom = new THREE.PlaneGeometry(TILE_SIZE * 0.95, LABEL_HEIGHT);
 
+  const houseGeom = new THREE.BoxGeometry(HOUSE_SIZE, HOUSE_HEIGHT, HOUSE_SIZE);
+  const hotelGeom = new THREE.BoxGeometry(HOTEL_SIZE, HOTEL_HEIGHT, HOTEL_SIZE);
+  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5016 });
+  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
+
   for (let i = 0; i < 40; i++) {
     const [x, , z] = getPosition3D(i);
     const isCorner = i === 0 || i === 10 || i === 20 || i === 30;
@@ -79,6 +99,33 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
     labelMesh.position.set(x, LABEL_Y_OFFSET + LABEL_HEIGHT / 2, z);
     scene.add(labelMesh);
     labelMeshesRef.current.push(labelMesh);
+
+    if (!BUILDABLE_POSITIONS.has(i)) continue;
+    const level = DEMO_DEVELOPMENT[i] ?? 0;
+    if (level === 0) continue;
+
+    const baseY = TILE_HEIGHT + (level === 5 ? HOTEL_HEIGHT / 2 : HOUSE_HEIGHT / 2);
+
+    if (level === 5) {
+      const hotel = new THREE.Mesh(hotelGeom, hotelMaterial);
+      hotel.position.set(x, baseY, z);
+      hotel.castShadow = true;
+      scene.add(hotel);
+    } else {
+      const step = 0.2;
+      const offsets: [number, number][] =
+        level === 1 ? [[0, 0]] :
+        level === 2 ? [[-step / 2, 0], [step / 2, 0]] :
+        level === 3 ? [[-step / 2, 0], [step / 2, 0], [0, step / 2]] :
+        [[-step / 2, -step / 2], [step / 2, -step / 2], [-step / 2, step / 2], [step / 2, step / 2]];
+      for (let h = 0; h < level; h++) {
+        const [ox, oz] = offsets[h];
+        const house = new THREE.Mesh(houseGeom, houseMaterial);
+        house.position.set(x + ox, baseY, z + oz);
+        house.castShadow = true;
+        scene.add(house);
+      }
+    }
   }
 
   return scene;

@@ -83,8 +83,8 @@ const EXTERNAL_DETECT_WALLETS_SHIM = `
 })();
 `;
 
-/** Routes with minimal layout (no Cartridge): avoids ReactCurrentBatchConfig and keeps 3D isolated. */
-const MINIMAL_LAYOUT_ROUTES = ['/board-3d-canvas', '/board-3d-vanilla'];
+/** Routes with minimal layout (no Cartridge): R3F iframe only; vanilla Three.js page uses full layout to test no clash. */
+const MINIMAL_LAYOUT_ROUTES = ['/board-3d-canvas'];
 
 export function LayoutSwitcher({ children, cookies }: { children: ReactNode; cookies: string | null }) {
   const pathname = usePathname();
