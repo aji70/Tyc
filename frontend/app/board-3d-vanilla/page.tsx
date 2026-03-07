@@ -2,23 +2,48 @@
 
 import { useRef, useEffect } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { getPosition3D } from "@/components/game/board3d/positions";
+import { BOARD_SQUARE_NAMES } from "@/components/game/board3d/squareNames";
 
 /**
  * Skeletal 3D Monopoly-style board using vanilla Three.js only (no R3F).
- * Avoids ReactCurrentBatchConfig conflict with Cartridge.
+ * Spinnable via OrbitControls; property names on each tile.
  */
 
 const TILE_SIZE = 0.9;
 const TILE_HEIGHT = 0.05;
+const LABEL_HEIGHT = 0.15;
+const LABEL_Y_OFFSET = TILE_HEIGHT + 0.02;
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
 const CAMERA_LOOK_AT: [number, number, number] = [0, 0, 0];
 
-function buildBoardScene(): THREE.Scene {
+function makeLabelTexture(name: string): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  const w = 256;
+  const h = 64;
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#0a1214";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#00F0FF";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, w - 4, h - 4);
+  ctx.fillStyle = "#00F0FF";
+  ctx.font = "bold 20px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name.length > 18 ? name.slice(0, 16) + "…" : name, w / 2, h / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x010f10);
 
-  // Lights
   const ambient = new THREE.AmbientLight(0x404060, 0.8);
   scene.add(ambient);
   const dir = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -26,12 +51,13 @@ function buildBoardScene(): THREE.Scene {
   dir.castShadow = true;
   scene.add(dir);
 
-  // 40 tiles in a loop (same layout as positions.ts)
   const tileGeom = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
   const cornerColor = new THREE.Color(0x2ecc71);
   const tileColor = new THREE.Color(0x1a3a3e);
   const cornerMaterial = new THREE.MeshStandardMaterial({ color: cornerColor });
   const tileMaterial = new THREE.MeshStandardMaterial({ color: tileColor });
+
+  const labelGeom = new THREE.PlaneGeometry(TILE_SIZE * 0.95, LABEL_HEIGHT);
 
   for (let i = 0; i < 40; i++) {
     const [x, , z] = getPosition3D(i);
@@ -41,6 +67,18 @@ function buildBoardScene(): THREE.Scene {
     mesh.position.set(x, TILE_HEIGHT / 2, z);
     mesh.receiveShadow = true;
     scene.add(mesh);
+
+    const name = BOARD_SQUARE_NAMES[i] ?? `Square ${i}`;
+    const labelMat = new THREE.MeshBasicMaterial({
+      map: makeLabelTexture(name),
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const labelMesh = new THREE.Mesh(labelGeom, labelMat);
+    labelMesh.position.set(x, LABEL_Y_OFFSET + LABEL_HEIGHT / 2, z);
+    scene.add(labelMesh);
+    labelMeshesRef.current.push(labelMesh);
   }
 
   return scene;
@@ -50,13 +88,16 @@ export default function Board3DVanillaPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const labelMeshesRef = useRef<THREE.Mesh[]>([]);
   const frameRef = useRef<number>(0);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const scene = buildBoardScene();
+    labelMeshesRef.current = [];
+    const scene = buildBoardScene(labelMeshesRef);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
@@ -69,6 +110,12 @@ export default function Board3DVanillaPage() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(...CAMERA_LOOK_AT);
+    controlsRef.current = controls;
 
     function onResize() {
       if (!container || !renderer || !camera) return;
@@ -83,6 +130,8 @@ export default function Board3DVanillaPage() {
 
     function animate() {
       frameRef.current = requestAnimationFrame(animate);
+      controls.update();
+      labelMeshesRef.current.forEach((mesh) => mesh.lookAt(camera.position));
       renderer.render(scene, camera);
     }
     animate();
@@ -90,12 +139,15 @@ export default function Board3DVanillaPage() {
     return () => {
       window.removeEventListener("resize", onResize);
       cancelAnimationFrame(frameRef.current);
+      controls.dispose();
       if (container && renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
       renderer.dispose();
       sceneRef.current = null;
       rendererRef.current = null;
+      controlsRef.current = null;
+      labelMeshesRef.current = [];
     };
   }, []);
 
