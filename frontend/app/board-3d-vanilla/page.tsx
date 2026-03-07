@@ -34,6 +34,32 @@ const HOUSE_HEIGHT = 0.12;
 const HOTEL_SIZE = 0.22;
 const HOTEL_HEIGHT = 0.2;
 
+/** Same property/tile colors as R3F BoardScene (buildMockProperties). */
+const TILE_COLORS: { id: number; color: string }[] = [
+  { id: 0, color: "#2ecc71" }, { id: 1, color: "#8B4513" }, { id: 2, color: "#8B4513" }, { id: 3, color: "#8B4513" }, { id: 4, color: "#fff" },
+  { id: 5, color: "railroad" }, { id: 6, color: "#87CEEB" }, { id: 7, color: "#87CEEB" }, { id: 8, color: "#87CEEB" }, { id: 9, color: "#87CEEB" },
+  { id: 10, color: "#7f8c8d" }, { id: 11, color: "#FF69B4" }, { id: 12, color: "utility" }, { id: 13, color: "#FF69B4" }, { id: 14, color: "#FF69B4" },
+  { id: 15, color: "railroad" }, { id: 16, color: "#FFA500" }, { id: 17, color: "#FFA500" }, { id: 18, color: "#FFA500" }, { id: 19, color: "#FFA500" },
+  { id: 20, color: "#3498db" }, { id: 21, color: "#FF0000" }, { id: 22, color: "#FF0000" }, { id: 23, color: "#FF0000" }, { id: 24, color: "#FF0000" },
+  { id: 25, color: "railroad" }, { id: 26, color: "#FFD700" }, { id: 27, color: "#FFD700" }, { id: 28, color: "utility" }, { id: 29, color: "#FFD700" },
+  { id: 30, color: "#e74c3c" }, { id: 31, color: "#228B22" }, { id: 32, color: "#228B22" }, { id: 33, color: "#228B22" }, { id: 34, color: "#228B22" },
+  { id: 35, color: "railroad" }, { id: 36, color: "#0000CD" }, { id: 37, color: "#0000CD" }, { id: 38, color: "#0000CD" }, { id: 39, color: "#0000CD" },
+];
+
+function hexToThreeColor(hex: string): THREE.Color {
+  const n = parseInt(hex.replace(/^#/, ""), 16);
+  return new THREE.Color(n);
+}
+
+/** R3F-style material: roughness 0.85, metalness 0.05. */
+function getTileMaterial(color: THREE.Color): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.85,
+    metalness: 0.05,
+  });
+}
+
 function makeLabelTexture(name: string): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   const w = 256;
@@ -41,13 +67,13 @@ function makeLabelTexture(name: string): THREE.CanvasTexture {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#0a1214";
+  ctx.fillStyle = "#0a0a0a";
   ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = "#00F0FF";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 1;
   ctx.strokeRect(2, 2, w - 4, h - 4);
-  ctx.fillStyle = "#00F0FF";
-  ctx.font = "bold 20px system-ui, sans-serif";
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 11px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(name.length > 18 ? name.slice(0, 16) + "…" : name, w / 2, h / 2);
@@ -68,22 +94,31 @@ function buildBoardScene(labelMeshesRef: { current: THREE.Mesh[] }): THREE.Scene
   scene.add(dir);
 
   const tileGeom = new THREE.BoxGeometry(TILE_SIZE, TILE_HEIGHT, TILE_SIZE);
-  const cornerColor = new THREE.Color(0x2ecc71);
-  const tileColor = new THREE.Color(0x1a3a3e);
-  const cornerMaterial = new THREE.MeshStandardMaterial({ color: cornerColor });
-  const tileMaterial = new THREE.MeshStandardMaterial({ color: tileColor });
+  const railroadColor = new THREE.Color(0xf2f2f5);
+  const utilityColor = new THREE.Color(0xf4d03f);
+  const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+  function getMaterial(colorSpec: string): THREE.MeshStandardMaterial {
+    let key = colorSpec;
+    let color: THREE.Color;
+    if (colorSpec === "railroad") color = railroadColor;
+    else if (colorSpec === "utility") color = utilityColor;
+    else color = hexToThreeColor(colorSpec);
+    key = color.getStyle();
+    if (!materialCache.has(key)) materialCache.set(key, getTileMaterial(color));
+    return materialCache.get(key)!;
+  }
 
   const labelGeom = new THREE.PlaneGeometry(TILE_SIZE * 0.95, LABEL_HEIGHT);
 
   const houseGeom = new THREE.BoxGeometry(HOUSE_SIZE, HOUSE_HEIGHT, HOUSE_SIZE);
   const hotelGeom = new THREE.BoxGeometry(HOTEL_SIZE, HOTEL_HEIGHT, HOTEL_SIZE);
-  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5016 });
-  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
+  const houseMaterial = new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.85, metalness: 0.05 });
+  const hotelMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.85, metalness: 0.05 });
 
   for (let i = 0; i < 40; i++) {
     const [x, , z] = getPosition3D(i);
-    const isCorner = i === 0 || i === 10 || i === 20 || i === 30;
-    const mat = isCorner ? cornerMaterial : tileMaterial;
+    const colorSpec = TILE_COLORS[i]?.color ?? "#1a3a3e";
+    const mat = getMaterial(colorSpec);
     const mesh = new THREE.Mesh(tileGeom, mat);
     mesh.position.set(x, TILE_HEIGHT / 2, z);
     mesh.receiveShadow = true;
