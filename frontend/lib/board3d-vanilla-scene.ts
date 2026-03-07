@@ -34,6 +34,15 @@ const BUILDABLE_POSITIONS = new Set([
   1, 3, 6, 8, 9, 11, 13, 14, 16, 18, 19, 21, 23, 24, 26, 27, 28, 31, 32, 34, 37, 39,
 ]);
 
+/** Special tile type by position (when prop.type is missing). */
+function getSpecialTypeByPosition(i: number): "chance" | "community_chest" | "income_tax" | "luxury_tax" | null {
+  if ([7, 22, 36].includes(i)) return "chance";
+  if ([2, 17, 33].includes(i)) return "community_chest";
+  if (i === 4) return "income_tax";
+  if (i === 38) return "luxury_tax";
+  return null;
+}
+
 // Monopoly color groups (match BoardScene); used for property building height.
 const COLOR_GROUPS: Record<string, number[]> = {
   brown: [1, 3],
@@ -82,6 +91,28 @@ export function getColorSpec(prop: Property): string {
   if (prop.type === "income_tax") return "income_tax";
   if (prop.type === "luxury_tax") return "luxury_tax";
   return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
+}
+
+/** Create a texture with text (e.g. "?", "Chest", "$") for Chance/Chest/Tax labels. */
+function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: string; bgColor?: string } = {}): THREE.CanvasTexture {
+  const { fontSize = 32, fontColor = "#1a1a1a", bgColor = "transparent" } = opts;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  if (bgColor !== "transparent") {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, size, size);
+  }
+  ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = fontColor;
+  ctx.fillText(text, size / 2, size / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
 }
 
 /** Create a texture with the emoji drawn on a circular background (for player token sprites). */
@@ -266,6 +297,74 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       carriage.position.set(x + size * 0.15, 0.12, z);
       carriage.castShadow = true;
       scene.add(carriage);
+    }
+    // ---- CHANCE: standing card with ? label ----
+    else if ((prop?.type ?? getSpecialTypeByPosition(i)) === "chance") {
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(size * 0.3, 0.08, size * 0.3), new THREE.MeshStandardMaterial({ color: 0x5d4037 }));
+      stand.position.set(x, 0.05, z);
+      stand.castShadow = true;
+      scene.add(stand);
+      const card = new THREE.Mesh(new THREE.BoxGeometry(size * 0.28, size * 0.5, 0.02), new THREE.MeshStandardMaterial({ color: 0xf1c40f }));
+      card.position.set(x, 0.2, z);
+      card.castShadow = true;
+      scene.add(card);
+      const chanceTex = makeTextTexture("?", { fontSize: 28, fontColor: "#1a1a1a" });
+      const chanceSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: chanceTex, transparent: true, depthTest: false }));
+      chanceSprite.position.set(x, 0.22, z);
+      chanceSprite.scale.set(0.35, 0.35, 1);
+      scene.add(chanceSprite);
+    }
+    // ---- COMMUNITY CHEST: treasure chest + "Chest" label ----
+    else if ((prop?.type ?? getSpecialTypeByPosition(i)) === "community_chest") {
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(size * 0.55, 0.025, size * 0.45), new THREE.MeshStandardMaterial({ color: 0x3e2723 }));
+      pad.position.set(x, 0.02, z);
+      pad.castShadow = true;
+      scene.add(pad);
+      const body = new THREE.Mesh(new THREE.BoxGeometry(size * 0.48, size * 0.24, size * 0.36), new THREE.MeshStandardMaterial({ color: 0x1e8449, roughness: 0.6 }));
+      body.position.set(x, 0.14, z);
+      body.castShadow = true;
+      scene.add(body);
+      const bandH = new THREE.Mesh(new THREE.BoxGeometry(size * 0.5, 0.045, 0.04), new THREE.MeshStandardMaterial({ color: 0xd4a574 }));
+      bandH.position.set(x, 0.14, z + size * 0.2);
+      bandH.castShadow = true;
+      scene.add(bandH);
+      const bandC = new THREE.Mesh(new THREE.BoxGeometry(size * 0.5, 0.045, 0.04), new THREE.MeshStandardMaterial({ color: 0xd4a574 }));
+      bandC.position.set(x, 0.14, z);
+      bandC.castShadow = true;
+      scene.add(bandC);
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(size * 0.5, 0.06, size * 0.38), new THREE.MeshStandardMaterial({ color: 0x229954, roughness: 0.6 }));
+      lid.position.set(x, 0.3, z);
+      lid.castShadow = true;
+      scene.add(lid);
+      const lock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.02), new THREE.MeshStandardMaterial({ color: 0xf1c40f }));
+      lock.position.set(x, 0.1, z + size * 0.19);
+      lock.castShadow = true;
+      scene.add(lock);
+      const chestTex = makeTextTexture("Chest", { fontSize: 12, fontColor: "#fff" });
+      const chestSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: chestTex, transparent: true, depthTest: false }));
+      chestSprite.position.set(x, 0.22, z);
+      chestSprite.scale.set(0.4, 0.15, 1);
+      scene.add(chestSprite);
+    }
+    // ---- TAX: tax office + $ label ----
+    else if ((prop?.type ?? getSpecialTypeByPosition(i)) === "income_tax" || (prop?.type ?? getSpecialTypeByPosition(i)) === "luxury_tax") {
+      const steps = new THREE.Mesh(new THREE.BoxGeometry(size * 0.65, 0.04, size * 0.65), new THREE.MeshStandardMaterial({ color: 0x4a235a }));
+      steps.position.set(x, 0.03, z);
+      steps.castShadow = true;
+      scene.add(steps);
+      const building = new THREE.Mesh(new THREE.BoxGeometry(size * 0.55, 0.28, size * 0.55), new THREE.MeshStandardMaterial({ color: 0x5b2c6f }));
+      building.position.set(x, 0.18, z);
+      building.castShadow = true;
+      scene.add(building);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(size * 0.6, 0.05, size * 0.6), new THREE.MeshStandardMaterial({ color: 0x4a235a }));
+      roof.position.set(x, 0.34, z);
+      roof.castShadow = true;
+      scene.add(roof);
+      const taxTex = makeTextTexture("$", { fontSize: 14, fontColor: "#fff" });
+      const taxSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: taxTex, transparent: true, depthTest: false }));
+      taxSprite.position.set(x, 0.22, z);
+      taxSprite.scale.set(0.3, 0.3, 1);
+      scene.add(taxSprite);
     }
     // ---- PROPERTIES: terraced building + pitched roof + houses/hotel on top ----
     else if (BUILDABLE_POSITIONS.has(i)) {
