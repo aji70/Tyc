@@ -7,7 +7,7 @@ interface RoomErrorProps {
   reset: () => void;
 }
 
-/** Errors that require a full reload (e.g. WebGL context lost); others can use reset() to keep wallet connected. */
+/** Errors that require a full reload; others can use reset() to keep wallet connected. */
 function isUnrecoverableError(error: Error | null): boolean {
   if (!error?.message) return false;
   const msg = error.message.toLowerCase();
@@ -16,7 +16,9 @@ function isUnrecoverableError(error: Error | null): boolean {
     msg.includes("context lost") ||
     (msg.includes("style") && msg.includes("detached")) ||
     msg.includes("getcontext") ||
-    msg.includes("rendering context")
+    msg.includes("rendering context") ||
+    msg.includes("reactcurrentbatchconfig") ||
+    msg.includes("react dom")
   );
 }
 

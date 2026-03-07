@@ -19,6 +19,13 @@ const nextConfig = {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.output.webassemblyModuleFilename =
       isServer && !dev ? '../static/wasm/[modulehash].wasm' : 'static/wasm/[modulehash].wasm';
+    // Force a single React instance to avoid "ReactCurrentBatchConfig" / multiple-React errors (Cartridge/Dojo/ R3F)
+    config.resolve = config.resolve ?? {};
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+    };
     return config;
   },
   async redirects() {
