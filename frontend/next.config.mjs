@@ -31,8 +31,16 @@ const nextConfig = {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = {
       ...config.resolve.alias,
-      react: path.resolve(__dirname, 'node_modules/react'),
-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+      // Server: use shim that adds React.cache (Next 15 + R3F expect it; React 18 doesn't export it)
+      ...(isServer
+        ? {
+            react: path.resolve(__dirname, 'lib/react-server-shim.js'),
+            'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+          }
+        : {
+            react: path.resolve(__dirname, 'node_modules/react'),
+            'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+          }),
     };
     // Prevent R3F/drei from being executed on server (avoids "cache is not a function" during page data collection)
     if (isServer) {
