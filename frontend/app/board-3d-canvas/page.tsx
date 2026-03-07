@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { Property } from "@/types/game";
+import type { Property, Game } from "@/types/game";
 import {
   isBoard3DStateMessage,
   type Board3DCanvasState,
@@ -12,6 +12,7 @@ import {
 import { buildBoardScene } from "@/lib/board3d-vanilla-scene";
 import { getPosition3D } from "@/components/game/board3d/positions";
 import { getSquareName } from "@/components/game/board3d/squareNames";
+import ActionLog from "@/components/game/ai-board/action-log";
 
 const BOARD_3D_MESSAGE_SOURCE = "tycoon-board3d-canvas";
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
@@ -224,7 +225,11 @@ export default function Board3DCanvasPage() {
 
   const showRollUi = state.showRollUi ?? false;
   const rollingDice = state.rollingDice;
-  const isLiveGame = state.isLiveGame ?? false;
+  const lastRollResult = state.lastRollResult;
+  const rollLabel = state.rollLabel;
+  const aiThinking = state.aiThinking ?? false;
+  const thinkingLabel = state.thinkingLabel ?? "AI is thinking...";
+  const history = state.history as Game["history"] | undefined;
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#010F10] flex flex-col">
@@ -241,29 +246,71 @@ export default function Board3DCanvasPage() {
           {hoveredTile.name}
         </div>
       )}
-      {showRollUi && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
-          <button
-            type="button"
-            onClick={onRollClick}
-            className="px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm uppercase tracking-wide shadow-lg"
-          >
-            Roll
-          </button>
+      {/* Center overlay: AI thinking, roll result, Roll button, action log (match R3F board) */}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center z-10">
+        <div className="pointer-events-auto flex flex-col items-center justify-center gap-3">
+          {aiThinking && (
+            <div
+              className="text-lg font-semibold text-amber-400 whitespace-nowrap drop-shadow-[0_0_8px_rgba(0,0,0,0.9)]"
+              style={{ textShadow: "0 0 8px #000, 0 1px 4px #000" }}
+            >
+              {thinkingLabel}
+            </div>
+          )}
+          {lastRollResult && !rollingDice && (
+            <div className="flex flex-col items-center gap-2">
+              {rollLabel && (
+                <span
+                  className="text-xl font-semibold text-white/90 whitespace-nowrap"
+                  style={{ textShadow: "0 0 8px #000, 0 1px 4px #000" }}
+                >
+                  {rollLabel}
+                </span>
+              )}
+              <div
+                className="flex flex-row items-center justify-center gap-3 text-4xl font-extrabold text-white"
+                style={{ textShadow: "0 0 12px #000, 0 2px 6px #000" }}
+              >
+                <span className="text-cyan-400">{lastRollResult.die1}</span>
+                <span>+</span>
+                <span className="text-pink-400">{lastRollResult.die2}</span>
+                <span>=</span>
+                <span className="text-amber-400">{lastRollResult.total}</span>
+              </div>
+            </div>
+          )}
+          {showRollUi && !rollingDice && (
+            <button
+              type="button"
+              aria-label="Roll dice"
+              onClick={onRollClick}
+              className="px-5 py-2.5 text-sm font-bold text-slate-900 uppercase tracking-wider rounded-lg border-2 border-cyan-700 shadow-[0_4px_0_#0e7490,0_6px_16px_rgba(0,0,0,0.35)] cursor-pointer hover:opacity-95 active:translate-y-0.5 active:shadow-[0_2px_0_#0e7490] transition-all bg-gradient-to-b from-cyan-300 via-cyan-400 to-cyan-500"
+            >
+              Roll
+            </button>
+          )}
+          {rollingDice && (
+            <div className="flex items-center gap-3">
+              <span className="text-cyan-200 text-sm font-medium">Rolling…</span>
+              <button
+                type="button"
+                onClick={onDiceComplete}
+                className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
+              >
+                Done
+              </button>
+            </div>
+          )}
         </div>
-      )}
-      {isLiveGame && rollingDice && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-          <span className="text-cyan-200 text-sm">Rolling…</span>
-          <button
-            type="button"
-            onClick={onDiceComplete}
-            className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
-          >
-            Done
-          </button>
-        </div>
-      )}
+        {history && history.length > 0 && (
+          <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2 w-[340px] max-w-[calc(100vw-2rem)]">
+            <ActionLog
+              history={history}
+              className="!mt-0 !h-44 !max-h-44 !min-h-[180px] !rounded-lg !border-2 !border-cyan-500/40 !bg-slate-900/95"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
