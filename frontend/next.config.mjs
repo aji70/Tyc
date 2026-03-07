@@ -32,7 +32,6 @@ const nextConfig = {
         'react/jsx-runtime': path.join(reactDir, 'jsx-runtime.js'),
         'react/jsx-dev-runtime': path.join(reactDir, 'jsx-dev-runtime.js'),
       };
-      config.resolve.dedupe = [...(config.resolve.dedupe || []), 'react', 'react-dom'];
     }
 
     return config;
