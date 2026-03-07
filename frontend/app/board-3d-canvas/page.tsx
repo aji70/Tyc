@@ -155,11 +155,8 @@ export default function Board3DCanvasPage() {
     controls.dampingFactor = 0.05;
     controls.target.set(...CAMERA_LOOK_AT);
     controls.enablePan = true;
-    controls.enableZoom = true;
-    controls.minDistance = 5;
-    controls.maxDistance = 25;
+    controls.enableZoom = false;
     controls.maxPolarAngle = Math.PI / 2 - 0.1; // don't go below the board
-    controls.zoomSpeed = 0.8; // slightly slower zoom for steadier feel
     controlsRef.current = controls;
 
     function onResize() {
