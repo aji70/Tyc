@@ -11,7 +11,7 @@ import {
   useGetGameByCode,
 } from "@/context/ContractProvider";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
-import { useDojoPlayerOnChain } from "@/hooks/dojo/useDojoPlayerOnChain";
+import { useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
 import { useGuestAuthOptional } from "@/context/GuestAuthContext";
 import { toast } from "react-toastify";
 import { apiClient } from "@/lib/api";
@@ -34,7 +34,7 @@ const HeroSectionMobile: React.FC = () => {
   const [guestLoading, setGuestLoading] = useState(false);
 
   const { registerPlayer, isPending: registerPending } = useStarknetDojoRegister();
-  const { isRegisteredOnChain, isLoading: isOnChainLoading, error: onChainError } = useDojoPlayerOnChain(address ?? undefined);
+  const { isRegisteredOnChain, isLoading: isOnChainLoading, error: onChainError } = useIsRegisteredOnChain(address ?? undefined);
 
   useEffect(() => {
     console.log("[HeroSection-mobile] registration state", {

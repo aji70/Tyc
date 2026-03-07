@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { shortString } from 'starknet';
 import { readContract } from '@/lib/starknet-read';
 import {
@@ -146,20 +146,52 @@ export function useAllDojoReads() {
     loading,
     error,
     callRead,
-    // Player
     getUsername,
     isRegistered,
     getUser,
-    // Game
     getGame,
     getGameByCode,
     getGamePlayer,
     getGameSettings,
     getPlayersInGame,
     getLastGameCode,
-    // Reward
     balanceOf,
     getCashTierValue,
     getCollectibleInfo,
   };
+}
+
+/**
+ * Reactive hook for Hero/registration UI. Drop-in replacement for useDojoPlayerOnChain.
+ * Uses useAllDojoReads internally with fixed address normalization and result parsing.
+ */
+export function useIsRegisteredOnChain(address: string | undefined) {
+  const { isRegistered, loading, error } = useAllDojoReads();
+  const [isRegisteredOnChain, setIsRegisteredOnChain] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!address?.trim()) {
+      setIsRegisteredOnChain(false);
+      setIsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    isRegistered(address)
+      .then((val) => {
+        if (!cancelled) setIsRegisteredOnChain(val);
+      })
+      .catch(() => {
+        if (!cancelled) setIsRegisteredOnChain(false);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [address, isRegistered]);
+
+  return { isRegisteredOnChain, isLoading, error };
 }
