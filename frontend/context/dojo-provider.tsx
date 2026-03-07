@@ -29,6 +29,15 @@ export function DojoProvider({ children }: DojoProviderProps) {
         return;
       }
 
+      // @dojoengine/core creates Contract(manifest.world.abi, ...). Without world.abi we get "Cannot read properties of undefined (reading 'filter')" (getAbiStruct).
+      // Skip SDK init when manifest has no ABI so pages like play-ai-3d still work via RPC (useAllDojoReads). Add abi to manifest (e.g. from sozo build) for full Dojo features.
+      const manifest = (dojoConfig as { manifest?: { world?: { abi?: unknown } } }).manifest;
+      if (!manifest?.world?.abi || !Array.isArray(manifest.world.abi) || manifest.world.abi.length === 0) {
+        setSdk(null);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);

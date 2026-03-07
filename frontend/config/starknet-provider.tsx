@@ -13,8 +13,20 @@ import { TYCOON_SESSION_POLICIES } from '@/constants/sessionPolicies';
 
 const noop = function externalDetectWallets() {};
 
+/** Ensure externalDetectWallets exists on the object so Cartridge internals (e.g. index-kfoymnlo.js) don't throw "t.externalDetectWallets is not a function". */
+function ensureExternalDetectWallets(obj: object) {
+  if (obj && typeof (obj as Record<string, unknown>).externalDetectWallets !== 'function') {
+    try {
+      Object.defineProperty(obj, 'externalDetectWallets', { value: noop, writable: true, configurable: true });
+    } catch {
+      (obj as Record<string, unknown>).externalDetectWallets = noop;
+    }
+  }
+}
+
 /** Wraps a connector in a Proxy so any code that calls .externalDetectWallets() gets a noop instead of throwing. */
 function wrapConnectorWithExternalDetect<T extends object>(connector: T): T {
+  ensureExternalDetectWallets(connector);
   return new Proxy(connector, {
     get(target, prop, receiver) {
       if (prop === 'externalDetectWallets') {
