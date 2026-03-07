@@ -33,8 +33,24 @@ export function gameTypeToDojo(gameType: string): bigint {
   return BigInt(shortString.encodeShortString(word));
 }
 
-/** Symbol id (e.g. "hat", "car") to Dojo player symbol index. */
-export function symbolToDojo(symbolId: string): number {
-  const i = GamePieces.findIndex((p) => p.id === symbolId);
-  return i >= 0 ? i : 0;
+/**
+ * Symbol id (e.g. "hat", "car") to Dojo player symbol.
+ * Contract expects shortstring felt252 "HAT", "CAR", "DOG", etc. (see player_symbol_from_felt in tycoon_contract).
+ */
+const CONTRACT_SYMBOLS: Record<string, string> = {
+  car: "CAR",
+  dog: "DOG",
+  hat: "HAT",
+  thimble: "THIMBLE",
+  wheelbarrow: "WHEELBARROW",
+  battleship: "BATTLESHIP",
+  boot: "BOOT",
+  iron: "IRON",
+  top_hat: "HAT", // contract has HAT only; map top_hat to HAT
+};
+
+export function symbolToDojo(symbolId: string): bigint {
+  const id = String(symbolId || "").trim().toLowerCase();
+  const word = CONTRACT_SYMBOLS[id] ?? (GamePieces.find((p) => p.id === id)?.name ?? "HAT");
+  return BigInt(shortString.encodeShortString(word));
 }
