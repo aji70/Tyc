@@ -14,6 +14,8 @@ const nextConfig = {
   outputFileTracingRoot: __dirname,
   // Next 15 + ESLint 8 can pass invalid options during build; ignore so WASM/Dojo build succeeds
   eslint: { ignoreDuringBuilds: true },
+  // Force R3F/drei/three to use the app's React (avoids Cartridge + R3F dual-React / ReactCurrentBatchConfig).
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   // Dojo SDK uses @dojoengine/torii-wasm (.wasm). Requires Next 15+ (webpack 5.97+) for WASM reference types.
   webpack(config, { isServer, dev }) {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
