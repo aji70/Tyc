@@ -2,20 +2,12 @@
 
 /**
  * Wraps the app with Starknet + Cartridge Controller for wallet connect.
- * Dojo SDK and StarknetProvider load only on the client so prerender (e.g. /_not-found) doesn't run Cartridge/Starknet in Node.
+ * Dojo SDK is loaded dynamically so /play-ai-3d and other pages can use useDojoSDK() without crashing.
  */
 import dynamic from "next/dynamic";
 import { ReactNode } from "react";
-
-const StarknetProvider = dynamic(
-  () => import("@/config/starknet-provider").then((m) => m.StarknetProvider),
-  { ssr: false }
-);
-
-const StarknetWalletProvider = dynamic(
-  () => import("@/context/starknet-wallet-provider").then((m) => m.StarknetWalletProvider),
-  { ssr: false }
-);
+import { StarknetProvider } from "@/config/starknet-provider";
+import { StarknetWalletProvider } from "@/context/starknet-wallet-provider";
 
 const DojoProvider = dynamic(
   () => import("@/context/dojo-provider").then((m) => m.DojoProvider),
