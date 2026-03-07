@@ -18,6 +18,18 @@ const BOARD_3D_MESSAGE_SOURCE = "tycoon-board3d-canvas";
 const CAMERA_POSITION: [number, number, number] = [0, 12, 12];
 const CAMERA_LOOK_AT: [number, number, number] = [0, 0, 0];
 
+const DICE_ROLL_MS = 1400;
+const DICE_SIZE = 0.6;
+/** Rotations so face 1..6 shows on top (x, y, z in radians). */
+const DICE_TOP_ROTATIONS: [number, number, number][] = [
+  [0, 0, 0],
+  [Math.PI / 2, 0, 0],
+  [0, 0, -Math.PI / 2],
+  [0, 0, Math.PI / 2],
+  [-Math.PI / 2, 0, 0],
+  [Math.PI, 0, 0],
+];
+
 function postToParent(msg: Board3DMessageFromCanvas) {
   if (typeof window === "undefined" || !window.parent) return;
   window.parent.postMessage({ ...msg, source: BOARD_3D_MESSAGE_SOURCE }, window.location.origin);
@@ -36,6 +48,9 @@ export default function Board3DCanvasPage() {
   const frameRef = useRef<number>(0);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
+  const diceGroupRef = useRef<THREE.Group | null>(null);
+  const diceStartTimeRef = useRef<number>(0);
+  const diceCompleteRef = useRef<boolean>(false);
 
   useEffect(() => {
     postToParent({ type: "BOARD_3D_READY" });
@@ -79,6 +94,8 @@ export default function Board3DCanvasPage() {
     const properties = state.properties as Property[];
     if (properties.length < 40) return;
 
+    diceGroupRef.current = null;
+    diceCompleteRef.current = false;
     labelMeshesRef.current = [];
     tileMeshesRef.current = [];
     const scene = buildBoardScene({
@@ -185,9 +202,50 @@ export default function Board3DCanvasPage() {
       }
     }
 
+    const rolling = state.rollingDice;
+    if (rolling && typeof rolling.die1 === "number" && typeof rolling.die2 === "number") {
+      const diceGroup = new THREE.Group();
+      diceGroup.position.set(0, 1, 0);
+      const boxGeo = new THREE.BoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xf8f8f8,
+        roughness: 0.3,
+        metalness: 0.08,
+      });
+      const die1Group = new THREE.Group();
+      die1Group.position.set(-DICE_SIZE * 1.2, 0, 0);
+      die1Group.add(new THREE.Mesh(boxGeo, mat));
+      const die2Group = new THREE.Group();
+      die2Group.position.set(DICE_SIZE * 1.2, 0, 0);
+      die2Group.add(new THREE.Mesh(boxGeo.clone(), mat.clone()));
+      diceGroup.add(die1Group);
+      diceGroup.add(die2Group);
+      scene.add(diceGroup);
+      diceGroupRef.current = diceGroup;
+      diceStartTimeRef.current = Date.now();
+    }
+
     function animate() {
       frameRef.current = requestAnimationFrame(animate);
       controls.update();
+      const diceGroup = diceGroupRef.current;
+      if (diceGroup && diceGroup.parent && !diceCompleteRef.current && diceGroup.children.length >= 2) {
+        const elapsed = Date.now() - diceStartTimeRef.current;
+        const die1 = diceGroup.children[0];
+        const die2 = diceGroup.children[1];
+        const r1 = DICE_TOP_ROTATIONS[Math.max(0, Math.min(5, (state?.rollingDice?.die1 ?? 1) - 1))];
+        const r2 = DICE_TOP_ROTATIONS[Math.max(0, Math.min(5, (state?.rollingDice?.die2 ?? 1) - 1))];
+        const spin = (elapsed / DICE_ROLL_MS) * Math.PI * 10;
+        if (elapsed >= DICE_ROLL_MS) {
+          diceCompleteRef.current = true;
+          die1.rotation.set(r1[0], r1[1], r1[2]);
+          die2.rotation.set(r2[0], r2[1], r2[2]);
+          onDiceComplete();
+        } else {
+          die1.rotation.set(r1[0] + spin * 0.7, r1[1] + spin * 1.2, r1[2] + spin * 0.6);
+          die2.rotation.set(r2[0] + spin * 0.9, r2[1] + spin * 0.5, r2[2] + spin * 1.1);
+        }
+      }
       renderer.render(scene, camera);
     }
     animate();
@@ -201,7 +259,7 @@ export default function Board3DCanvasPage() {
       labelMeshesRef.current = [];
       tileMeshesRef.current = [];
     };
-  }, [state, onSquareClick, onFocusComplete]);
+  }, [state, onSquareClick, onFocusComplete, onDiceComplete]);
 
   if (!state) {
     return (

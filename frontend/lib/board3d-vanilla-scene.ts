@@ -325,7 +325,7 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
       positionCounts[pos] = (positionCounts[pos] ?? 0) + 1;
     });
     const TOKEN_SIZE = 0.45;
-    const TOKEN_Y = 0.02;
+    const TOKEN_Y = 0.08; // above tile top (TILE_HEIGHT = 0.05) so tokens are visible
     players.forEach((player) => {
       const pos = animatedPositions[player.user_id] ?? (player.position ?? 0);
       const totalOnSquare = positionCounts[pos] ?? 1;
@@ -340,6 +340,7 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
         map: tex,
         transparent: true,
         depthWrite: false,
+        depthTest: false, // keep tokens visible above board from any angle
       });
       const sprite = new THREE.Sprite(mat);
       sprite.position.set(x + ox, TOKEN_Y, z);
