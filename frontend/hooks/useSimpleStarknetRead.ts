@@ -34,10 +34,12 @@ function getPlayerContractAddress(): string {
   return (typeof envAddr === 'string' ? envAddr : '') || '0x29dff7a557a1179b8c2ae9e79d82b4eeadb2d007011310e0b7b03327b074bbf';
 }
 
+/** Normalize Starknet address to canonical felt (0x + 64 hex chars). */
 function addressToFelt(addr: string): bigint {
-  const s = addr.trim().toLowerCase();
-  const hex = s.startsWith('0x') ? s : `0x${s}`;
-  return BigInt(hex);
+  const s = String(addr).trim().toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]+$/.test(s)) return BigInt(0);
+  const padded = s.padStart(64, '0');
+  return BigInt('0x' + padded);
 }
 
 function getResult(res: unknown): unknown[] {

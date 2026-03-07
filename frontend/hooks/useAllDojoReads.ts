@@ -10,10 +10,12 @@ import {
   REWARD_VIEW_ABI,
 } from '@/lib/dojo-contracts';
 
+/** Normalize Starknet address to canonical felt (0x + 64 hex chars). */
 function addressToFelt(addr: string): bigint {
-  const s = String(addr).trim().toLowerCase();
-  const hex = s.startsWith('0x') ? s : `0x${s}`;
-  return BigInt(hex);
+  const s = String(addr).trim().toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]+$/.test(s)) return BigInt(0);
+  const padded = s.padStart(64, '0');
+  return BigInt('0x' + padded);
 }
 
 function usernameToFelt(username: string): bigint {
@@ -25,8 +27,11 @@ function usernameToFelt(username: string): bigint {
   }
 }
 
+/** Extract result array from starknet.js Contract.call response. v6 returns parsed values directly. */
 function getResult(res: unknown): unknown[] {
+  if (res === undefined || res === null) return [];
   if (Array.isArray(res)) return res;
+  if (typeof res === 'boolean' || typeof res === 'bigint' || typeof res === 'number') return [res];
   const r = res as { result?: unknown };
   const inner = r?.result;
   if (Array.isArray(inner)) return inner;
@@ -34,7 +39,8 @@ function getResult(res: unknown): unknown[] {
     const nested = (inner as { result?: unknown }).result;
     if (Array.isArray(nested)) return nested;
   }
-  return [];
+  if (inner !== undefined && inner !== null) return [inner];
+  return [res];
 }
 
 export type ContractTag = 'player' | 'game' | 'reward';
@@ -90,9 +96,15 @@ export function useAllDojoReads() {
 
   const isRegistered = useCallback(
     async (address: string): Promise<boolean> => {
-      const arr = await callRead('player', 'is_registered', [addressToFelt(address)]) as unknown[];
-      const raw = arr[0];
-      return raw === true || raw === '0x1' || raw === 1 || BigInt(String(raw ?? 0)) !== BigInt(0);
+      const arr = (await callRead('player', 'is_registered', [addressToFelt(address)])) as unknown[];
+      const raw = arr?.[0] ?? arr;
+      if (raw === true) return true;
+      if (raw === false || raw === 0 || raw === BigInt(0) || raw === '0' || raw === '0x0') return false;
+      try {
+        return BigInt(String(raw)) !== BigInt(0);
+      } catch {
+        return false;
+      }
     },
     [callRead]
   );

@@ -58,11 +58,12 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   ]);
 }
 
-/** Address to single felt for calldata (ContractAddress = one felt in Cairo). */
+/** Address to single felt for calldata (ContractAddress = one felt in Cairo). Normalize to 64 hex chars. */
 function addressToFelt(addr: string): bigint {
-  const s = addr.trim().toLowerCase();
-  const hex = s.startsWith('0x') ? s : `0x${s}`;
-  return BigInt(hex);
+  const s = String(addr).trim().toLowerCase().replace(/^0x/, '');
+  if (!/^[0-9a-f]+$/.test(s)) return BigInt(0);
+  const padded = s.padStart(64, '0');
+  return BigInt('0x' + padded);
 }
 
 function getResult(res: unknown): unknown[] {
