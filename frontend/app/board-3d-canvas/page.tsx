@@ -34,14 +34,19 @@ export default function Board3DCanvasPage() {
     mountedRef.current = true;
     setMounted(true);
     postToParent({ type: "BOARD_3D_READY" });
+    const readyInterval = window.setInterval(() => postToParent({ type: "BOARD_3D_READY" }), 200);
+    const stop = window.setTimeout(() => window.clearInterval(readyInterval), 2000);
     return () => {
+      window.clearInterval(readyInterval);
+      window.clearTimeout(stop);
       mountedRef.current = false;
     };
   }, []);
 
   useEffect(() => {
     const handler = (e: MessageEvent) => {
-      if (!mountedRef.current || e.origin !== window.location.origin) return;
+      if (!mountedRef.current) return;
+      if (e.origin !== window.location.origin) return;
       if (isBoard3DStateMessage(e.data)) {
         setState(e.data.payload);
       }

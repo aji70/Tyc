@@ -1639,6 +1639,13 @@ function Board3DPageContent() {
     ? (lastVisibleRoll.user_id === me?.user_id ? "You rolled" : `${lastVisibleRoll.username} rolled`)
     : undefined;
 
+  // When iframe mounts, start sending state after short delay (in case READY message is missed) or when we receive READY.
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current) return;
+    const t = window.setTimeout(() => setCanvasIframeReady(true), 400);
+    return () => window.clearTimeout(t);
+  }, [canvasMounted, showCanvasArea]);
+
   // Post state to 3D canvas iframe (isolates R3F from Cartridge to avoid ReactCurrentBatchConfig).
   useEffect(() => {
     if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current || !canvasIframeReady) return;
