@@ -77,9 +77,18 @@ const nextConfig = {
   },
 };
 
+const hasSentryAuth = Boolean(process.env.SENTRY_AUTH_TOKEN);
+
 export default withSentryConfig(nextConfig, {
   silent: !process.env.CI,
   org: process.env.SENTRY_ORG ?? undefined,
   project: process.env.SENTRY_PROJECT ?? undefined,
+  authToken: hasSentryAuth ? process.env.SENTRY_AUTH_TOKEN : undefined,
+  // Skip source map upload when no token so build doesn’t warn
+  sourcemaps: {
+    disable: !hasSentryAuth,
+    deleteSourcemapsAfterUpload: hasSentryAuth,
+  },
+  telemetry: false,
 });
 
