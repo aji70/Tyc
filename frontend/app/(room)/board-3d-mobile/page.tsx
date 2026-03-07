@@ -39,15 +39,7 @@ import ActionLog from "@/components/game/ai-board/action-log";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Trophy, HeartHandshake, MessageCircle, X } from "lucide-react";
 import GameyChatRoom from "@/components/game/board3d/GameyChatRoom";
-
-const Canvas = dynamic(
-  () => import("@react-three/fiber").then((m) => m.Canvas),
-  { ssr: false }
-);
-const BoardScene = dynamic(
-  () => import("@/components/game/board3d/BoardScene").then((m) => m.default),
-  { ssr: false }
-);
+import { postToCanvas } from "@/lib/board3d-iframe-messages";
 
 const PERK_CASH_TIERS = [0, 100, 250, 500, 700, 1000];
 const PERK_REFUND_TIERS = [0, 60, 150, 300, 420, 600];
@@ -378,21 +370,25 @@ function Board3DMobileContent() {
   const [canvasKey, setCanvasKey] = useState(0);
   const [canvasReady, setCanvasReady] = useState(false);
   const [canvasMounted, setCanvasMounted] = useState(false);
+  const [canvasIframeReady, setCanvasIframeReady] = useState(false);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const canvasIframeRef = useRef<HTMLIFrameElement>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const pendingShowCardModalRef = useRef(false);
   const pendingBuyPromptRef = useRef(false);
 
-  // When user navigates away and back: reset so we remount Canvas only after container is in DOM (avoids R3F connect() reading .style on undefined).
+  // When user navigates away and back: reset so we remount iframe only after container is in DOM.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
+        setCanvasIframeReady(false);
         setCanvasMounted(false);
         setCanvasReady(false);
       }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        setCanvasIframeReady(false);
         setCanvasMounted(false);
         setCanvasReady(false);
       }
@@ -414,7 +410,7 @@ function Board3DMobileContent() {
       return () => window.clearTimeout(t);
     }
   }, [canvasReady]);
-  // Phase 2: mount Canvas only after the container is in the DOM (we show container when !loading and canvasReady). Re-run when loading finishes so ref is set.
+  // Phase 2: mount iframe only after the container is in the DOM (we show container when !loading and canvasReady). Re-run when loading finishes so ref is set.
   const showCanvasArea = canvasReady && !isLoading && !(gameCode && gameLoading);
   useLayoutEffect(() => {
     if (!showCanvasArea) {
@@ -434,6 +430,13 @@ function Board3DMobileContent() {
       cancelAnimationFrame(id);
     };
   }, [showCanvasArea]);
+
+  // When iframe is used, assume ready after delay (avoids relying only on BOARD_3D_READY)
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current) return;
+    const t = window.setTimeout(() => setCanvasIframeReady(true), 400);
+    return () => window.clearTimeout(t);
+  }, [canvasMounted, showCanvasArea]);
 
   const timeUpHandledRef = useRef(false);
   const rollingForPlayerIdRef = useRef<number | null>(null);
@@ -1924,6 +1927,153 @@ function Board3DMobileContent() {
   const players = isLiveGame ? livePlayers : [];
   const emptyPlayers = useMemo(() => [], []);
 
+  const rollLabel =
+    lastRollResultToShow && currentPlayer
+      ? isMyTurn
+        ? "You rolled"
+        : `${currentPlayer.username ?? "Player"} rolled`
+      : undefined;
+
+  // Post state to 3D canvas iframe (R3F runs only in iframe to avoid ReactCurrentBatchConfig with Cartridge).
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current || !canvasIframeReady) return;
+    postToCanvas(canvasIframeRef.current, {
+      type: "BOARD_3D_STATE",
+      payload: {
+        properties,
+        players: isLiveGame ? players : [],
+        animatedPositions: positions,
+        currentPlayerId: isLiveGame ? currentPlayerId : 1,
+        developmentByPropertyId: liveDevelopmentByPropertyId,
+        ownerByPropertyId: isLiveGame ? ownerByPropertyId : undefined,
+        rollingDice: rollingDice ?? undefined,
+        lastRollResult: lastRollResultToShow ?? undefined,
+        rollLabel,
+        history: historyToShow,
+        aiThinking: isLiveGame && !isMyTurn && currentPlayerId != null,
+        thinkingLabel:
+          isLiveGame && !isMyTurn && currentPlayer
+            ? `${currentPlayer.username || "Player"} is thinking...`
+            : undefined,
+        resetViewTrigger,
+        focusTilePosition: landedPositionForBuy ?? undefined,
+        spinOrbitDegrees,
+        showRollUi,
+        isLiveGame,
+      },
+    });
+  }, [
+    canvasMounted,
+    showCanvasArea,
+    canvasIframeReady,
+    properties,
+    players,
+    positions,
+    isLiveGame,
+    currentPlayerId,
+    liveDevelopmentByPropertyId,
+    ownerByPropertyId,
+    rollingDice,
+    lastRollResultToShow,
+    rollLabel,
+    historyToShow,
+    isMyTurn,
+    currentPlayer,
+    resetViewTrigger,
+    landedPositionForBuy,
+    spinOrbitDegrees,
+    showRollUi,
+  ]);
+
+  // Resend state every 400ms for 3s so iframe receives it when it finishes loading.
+  useEffect(() => {
+    if (!canvasMounted || !showCanvasArea || !canvasIframeRef.current || !game?.id || properties.length === 0)
+      return;
+    const payload = {
+      properties,
+      players: isLiveGame ? players : [],
+      animatedPositions: positions,
+      currentPlayerId: isLiveGame ? currentPlayerId : 1,
+      developmentByPropertyId: liveDevelopmentByPropertyId,
+      ownerByPropertyId: isLiveGame ? ownerByPropertyId : undefined,
+      rollingDice: rollingDice ?? undefined,
+      lastRollResult: lastRollResultToShow ?? undefined,
+      rollLabel,
+      history: historyToShow,
+      aiThinking: isLiveGame && !isMyTurn && currentPlayerId != null,
+      thinkingLabel:
+        isLiveGame && !isMyTurn && currentPlayer
+          ? `${currentPlayer.username || "Player"} is thinking...`
+          : undefined,
+      resetViewTrigger,
+      focusTilePosition: landedPositionForBuy ?? undefined,
+      spinOrbitDegrees,
+      showRollUi,
+      isLiveGame,
+    };
+    const send = () => {
+      if (canvasIframeRef.current) {
+        postToCanvas(canvasIframeRef.current, { type: "BOARD_3D_STATE", payload });
+      }
+    };
+    send();
+    const id = window.setInterval(send, 400);
+    const stop = window.setTimeout(() => window.clearInterval(id), 3000);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+  }, [
+    canvasMounted,
+    showCanvasArea,
+    game?.id,
+    properties.length,
+    isLiveGame,
+    currentPlayerId,
+    currentPlayer,
+    isMyTurn,
+    lastRollResultToShow,
+    historyToShow,
+    landedPositionForBuy,
+    resetViewTrigger,
+    spinOrbitDegrees,
+    showRollUi,
+    players,
+    positions,
+    liveDevelopmentByPropertyId,
+    ownerByPropertyId,
+    rollingDice,
+    rollLabel,
+  ]);
+
+  // Handle messages from 3D canvas iframe.
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.source !== "tycoon-board3d-canvas") return;
+      switch (e.data.type) {
+        case "BOARD_3D_READY":
+          setCanvasIframeReady(true);
+          break;
+        case "ROLL_CLICK":
+          onRollClick();
+          break;
+        case "SQUARE_CLICK": {
+          const prop = properties.find((p) => p.id === e.data.propertyId);
+          if (prop) handlePropertyClick(prop);
+          break;
+        }
+        case "DICE_COMPLETE":
+          onDiceCompleteClick();
+          break;
+        case "FOCUS_COMPLETE":
+          onFocusComplete();
+          break;
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [onRollClick, handlePropertyClick, onDiceCompleteClick, onFocusComplete, properties]);
+
   const gameEnded = gameError && (gameQueryError as Error)?.message === "Game ended";
   if (gameEnded) {
     return (
@@ -2080,43 +2230,14 @@ function Board3DMobileContent() {
             style={{ touchAction: "none", zIndex: 0, isolation: "isolate" }}
           >
             {canvasMounted ? (
-            <Canvas
-              key={canvasKey}
-              camera={{ position: [0, 12, 12], fov: 45 }}
-              shadows
-              gl={{ antialias: true, alpha: false }}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                display: "block",
-              }}
-            >
-              <BoardScene
-                properties={properties}
-                players={isLiveGame ? players : emptyPlayers}
-                animatedPositions={isLiveGame ? positions : {}}
-                currentPlayerId={isLiveGame ? currentPlayerId : null}
-                developmentByPropertyId={liveDevelopmentByPropertyId}
-                ownerByPropertyId={isLiveGame ? ownerByPropertyId : undefined}
-                ownerSymbolByPropertyId={isLiveGame ? ownerSymbolByPropertyId : undefined}
-                onSquareClick={handlePropertyClick}
-                rollingDice={rollingDice ?? undefined}
-                onDiceComplete={isLiveGame ? onDiceCompleteClick : undefined}
-                lastRollResult={lastRollResultToShow}
-                onRoll={showRollUi ? onRollClick : undefined}
-                history={historyToShow}
-                hideCenterActionLog={true}
-                hideOwnerBadges={false}
-                smallTokens={true}
-                aiThinking={isLiveGame && !isMyTurn && currentPlayerId != null}
-                resetViewTrigger={resetViewTrigger}
-                focusTilePosition={landedPositionForBuy}
-                onFocusComplete={onFocusComplete}
-                spinOrbitDegrees={spinOrbitDegrees}
+              <iframe
+                key={canvasKey}
+                ref={canvasIframeRef}
+                src="/board-3d-canvas"
+                title="3D Board"
+                className="absolute inset-0 w-full h-full border-0"
+                sandbox="allow-scripts allow-same-origin"
               />
-            </Canvas>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center gap-2 text-slate-400">
                 <div className="w-8 h-8 rounded-full border-2 border-cyan-500/50 border-t-cyan-400 animate-spin" />
