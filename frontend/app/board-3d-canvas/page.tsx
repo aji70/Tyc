@@ -120,7 +120,6 @@ export default function Board3DCanvasPage() {
     onResize();
     window.addEventListener("resize", onResize);
 
-    const properties = state.properties as Property[];
     function onPointerMove(e: PointerEvent) {
       if (!container) return;
       const rect = container.getBoundingClientRect();
