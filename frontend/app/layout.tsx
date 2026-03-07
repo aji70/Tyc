@@ -1,25 +1,9 @@
-import { dmSans, kronaOne, orbitron } from "@/components/shared/fonts";
-import NavBar from "@/components/shared/navbar"; // Remove if not used elsewhere
-import ScrollToTopBtn from "@/components/shared/scroll-to-top-btn";
 import "@/styles/globals.css";
 import { getMetadata } from "@/utils/getMeatadata";
 import { headers } from "next/headers";
-import ContextProvider from "@/context";
-import { TycoonProvider } from "@/context/ContractProvider";
-import { GuestAuthProvider } from "@/context/GuestAuthContext";
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { SocketProvider } from "@/context/SocketContext";
-import { TournamentProvider } from "@/context/TournamentContext";
-import { Toaster } from "react-hot-toast";
-import FarcasterReady from "@/components/FarcasterReady"; 
 import { minikitConfig } from "../minikit.config";
 import type { Metadata } from "next";
-import Script from "next/script";
-import ClientLayout from "../clients/ClientLayout"; // ← Import the new wrapper
-import QueryProvider from "./QueryProvider";
-import BfcacheReloadGuard from "@/components/BfcacheReloadGuard";
-import { LayoutBody } from "./layout-body";
+import { LayoutSwitcher } from "@/components/LayoutSwitcher";
 
 // Run before React: (1) Reload board when restored from bfcache so WebGL is fresh. (2) Disable bfcache on board so back button does full load instead of restore (avoids Context Lost + .style crash).
 const BFCACHE_RELOAD_SCRIPT = `
@@ -141,47 +125,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="antialiased bg-[#010F10] w-full">
-        <Script id="bfcache-reload" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: BFCACHE_RELOAD_SCRIPT }} />
-        <Script id="external-detect-wallets-shim-body" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: EXTERNAL_DETECT_WALLETS_SHIM }} />
-        <FarcasterReady />
-        <ContextProvider cookies={cookies}>
-          <LayoutBody>
-            <TycoonProvider>
-              <GuestAuthProvider>
-                <TournamentProvider>
-                  {/* Wallet connect: Cartridge Controller (Starknet) via LayoutBody's StarknetProvider */}
-                  <QueryProvider>
-                      <BfcacheReloadGuard />
-                      <ClientLayout cookies={cookies}>
-                        {children}
-                      </ClientLayout>
-
-                      <ScrollToTopBtn />
-                      <ToastContainer
-                        position="top-right"
-                        autoClose={5000}
-                        hideProgressBar={false}
-                        newestOnTop
-                        closeOnClick
-                        rtl={false}
-                        pauseOnFocusLoss
-                        draggable
-                        pauseOnHover
-                        theme="dark"
-                        toastStyle={{
-                          fontFamily: "Orbitron, sans-serif",
-                          background: "#0E1415",
-                          color: "#00F0FF",
-                          border: "1px solid #003B3E",
-                        }}
-                      />
-                      <Toaster position="top-center" />
-                  </QueryProvider>
-                </TournamentProvider>
-              </GuestAuthProvider>
-            </TycoonProvider>
-          </LayoutBody>
-        </ContextProvider>
+        <LayoutSwitcher cookies={cookies}>{children}</LayoutSwitcher>
       </body>
     </html>
   );
