@@ -406,15 +406,6 @@ const handleContinuePrevious = () => {
             />
           )}
 
-          {/* When no wallet: Connect wallet (open via menu on mobile) */}
-          {!address && registrationStatus === "disconnected" && !loading && (
-            <div className="w-full max-w-[300px] flex flex-col gap-3 items-center">
-              <p className="text-[#869298] text-xs text-center font-dmSans px-2">
-                Connect your wallet to play (use menu)
-              </p>
-            </div>
-          )}
-
           {address && (registrationStatus === "on-chain-only" || registrationStatus === "backend-only" || registrationStatus === "none") && !loading && !isOnChainLoading && (
             <button
               onClick={handleRegister}
@@ -548,12 +539,6 @@ const handleContinuePrevious = () => {
               )}
             </div>
           ) : null}
-
-          {!address && !guestUser && !loading && (
-            <p className="text-gray-400 text-sm text-center mt-4 px-2">
-              Connect your wallet (menu) to play.
-            </p>
-          )}
         </div>
       </div>
     </section>

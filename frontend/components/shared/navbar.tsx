@@ -24,11 +24,15 @@ import { toast } from 'react-hot-toast';
 const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
 
 const NavBar = () => {
-  const _pathname = usePathname();
-  const _searchParams = useSearchParams();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { scrollYProgress } = useScroll();
 
+  const isGamePage = pathname?.includes('/board') || pathname?.includes('game-play') || pathname?.includes('ai-play');
+  const shopHref = isGamePage && pathname
+    ? `/game-shop?returnTo=${encodeURIComponent(pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : ''))}`
+    : '/game-shop';
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
@@ -146,16 +150,16 @@ const NavBar = () => {
             </Link>
           )}
 
-          {/* Perk Shop button (only when connected) — Coming soon */}
+          {/* Perk Shop button (only when connected) */}
           {isConnected && (
-            <button
-              type="button"
-              onClick={() => toast('Coming soon', { icon: '🛒' })}
-              className="min-w-[90px] h-[40px] px-3 border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC] cursor-pointer"
+            <Link
+              href={shopHref}
+              onMouseEnter={() => router.prefetch('/game-shop')}
+              className="min-w-[90px] h-[40px] px-3 border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC]"
             >
               <ShoppingBag className="w-[16px] h-[16px]" />
               <span className="text-[12px] font-[400] font-dmSans">Perk Shop</span>
-            </button>
+            </Link>
           )}
 
           {/* Leaderboard button (only when connected) — Coming soon */}

@@ -2,11 +2,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import herobg from "@/public/heroBg.png";
 import Image from "next/image";
-import { Dices, Gamepad2, Wallet } from "lucide-react";
+import { Dices, Gamepad2 } from "lucide-react";
 import { TypeAnimation } from "react-type-animation";
 import { useRouter } from "next/navigation";
 import { useAccount } from "@starknet-react/core";
-import { useStarknetWallet } from "@/context/starknet-wallet-provider";
 import { usePreviousGameCode, useGetGameByCode } from "@/hooks/useAllDojoReads";
 import { useStarknetDojoRegister } from "@/hooks/dojo/useStarknetDojoRegister";
 import { useAllDojoReads, useIsRegisteredOnChain } from "@/hooks/useAllDojoReads";
@@ -20,9 +19,7 @@ import { useUserLevel } from "@/hooks/useUserLevel";
 const HeroSection: React.FC = () => {
   const router = useRouter();
   const { address, isConnecting } = useAccount();
-  const { connectors, connectWallet } = useStarknetWallet();
   const guestAuth = useGuestAuthOptional();
-  const openConnect = () => connectors[0] && connectWallet(connectors[0]);
   const guestUser = guestAuth?.guestUser ?? null;
 
   const [loading, setLoading] = useState(false);
@@ -457,23 +454,6 @@ const handleContinuePrevious = () => {
             />
           )}
 
-          {/* When no wallet: Connect wallet only */}
-          {!address && registrationStatus === "disconnected" && !loading && (
-            <div className="w-[80%] md:w-[400px] flex flex-col gap-4 items-center">
-              <button
-                type="button"
-                onClick={() => openConnect()}
-                className="relative group w-full sm:w-auto min-w-[200px] h-[52px] px-8 flex items-center justify-center rounded-xl border border-[#003B3E] bg-[#0E1415] text-[#00F0FF] font-orbitron text-[16px] font-[700] hover:border-[#00F0FF]/50 hover:bg-[#0E1415]/90 transition-all cursor-pointer"
-              >
-                <Wallet className="w-5 h-5 mr-2" />
-                Connect wallet
-              </button>
-              <p className="text-[#869298] text-xs text-center font-dmSans">
-                Connect your wallet to play
-              </p>
-            </div>
-          )}
-
           {/* Let's Go: on-chain-only (backend) | backend-only (contract) | none (both) */}
           {address && (registrationStatus === "on-chain-only" || registrationStatus === "backend-only" || registrationStatus === "none") && !loading && !isOnChainLoading && (
             <button
@@ -627,12 +607,6 @@ const handleContinuePrevious = () => {
               </button>
             </div>
           ) : null}
-
-          {!address && !guestUser && (
-            <p className="text-gray-400 text-sm text-center mt-4">
-              Connect your wallet to play.
-            </p>
-          )}
         </div>
       </main>
     </section>
