@@ -312,9 +312,21 @@ function Board3DPageContent() {
   const pendingShowCardModalRef = useRef(false);
   const pendingBuyPromptRef = useRef(false);
 
-  const currentPlayerId = game?.next_player_id ?? null;
+  // Normalize to number so string "123" from API matches number 123 (avoids "not my turn" when it is).
+  const rawNextPlayerId = game?.next_player_id;
+  const currentPlayerId =
+    rawNextPlayerId != null
+      ? Number(rawNextPlayerId)
+      : // Fallback for new AI games: backend may not have set next_player_id yet; first human (lowest turn_order) goes first.
+        game?.is_ai && game?.players?.length
+        ? (() => {
+            const byOrder = [...game.players].sort((a, b) => (a.turn_order ?? 999) - (b.turn_order ?? 999));
+            const first = byOrder[0];
+            return first?.user_id != null ? Number(first.user_id) : null;
+          })()
+        : null;
   const isUntimed = !game?.duration || Number(game.duration) === 0;
-  const isMyTurn = !!(me && currentPlayerId !== null && me.user_id === currentPlayerId);
+  const isMyTurn = !!(me && currentPlayerId !== null && Number(me.user_id) === currentPlayerId);
   const isGuest = !!guestUser;
   const gameTimeUp = game?.status === "FINISHED" || gameTimeUpLocal;
   const meInJail = !!(me && Number(me.position) === JAIL_POSITION && me.in_jail);
