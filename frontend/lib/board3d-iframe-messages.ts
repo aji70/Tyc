@@ -22,7 +22,6 @@ export type Board3DCanvasState = {
   focusTilePosition?: number | null;
   spinOrbitDegrees?: number;
   showRollUi?: boolean;
-  showEndTurnUi?: boolean;
   isLiveGame?: boolean;
 };
 
@@ -32,8 +31,7 @@ export type Board3DMessageFromCanvas =
   | { type: 'ROLL_CLICK' }
   | { type: 'SQUARE_CLICK'; propertyId: number }
   | { type: 'DICE_COMPLETE' }
-  | { type: 'FOCUS_COMPLETE' }
-  | { type: 'END_TURN_CLICK' };
+  | { type: 'FOCUS_COMPLETE' };
 
 export function isBoard3DStateMessage(m: unknown): m is Board3DMessageFromParent {
   return typeof m === 'object' && m !== null && (m as Record<string, unknown>).type === 'BOARD_3D_STATE';
