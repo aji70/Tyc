@@ -349,6 +349,8 @@ function Board3DPageContent() {
   const rolledForPlayerIdRef = useRef<number | null>(null);
   /** Guard: prevent change-position from being sent twice for the human in the same turn (backend would return passed_turn and advance turn). */
   const humanChangePositionSubmittedRef = useRef(false);
+  /** True while the human has clicked Roll and we haven't finished their move (dice → result → animate → API). Stops AI turn UI/logic from taking over before the human's move is done. */
+  const [humanRollInProgress, setHumanRollInProgress] = useState(false);
   const [strategyRanThisTurn, setStrategyRanThisTurn] = useState(false);
 
   const currentPlayer = useMemo(() => {
@@ -466,6 +468,7 @@ function Board3DPageContent() {
     const value = getDiceValues();
     pendingRollRef.current = value;
     rollingForPlayerIdRef.current = me.user_id;
+    setHumanRollInProgress(true);
     setRollingDice({ die1: value.die1, die2: value.die2 });
   }, [rollingDice, game, me]);
 
@@ -1202,12 +1205,14 @@ function Board3DPageContent() {
     if (!game?.id || !me) {
       setRollingDice(null);
       rollingForPlayerIdRef.current = null;
+      setHumanRollInProgress(false);
       return;
     }
     // Prevent double-submit: if we already sent change-position this turn, do not send again (backend would return passed_turn and advance turn).
     if (humanChangePositionSubmittedRef.current) {
       setRollingDice(null);
       rollingForPlayerIdRef.current = null;
+      setHumanRollInProgress(false);
       return;
     }
     const currentPos = me.position ?? 0;
@@ -1381,6 +1386,7 @@ function Board3DPageContent() {
       runningTotalRef.current = 0;
       setRollingDice(null);
       rollingForPlayerIdRef.current = null;
+      setHumanRollInProgress(false);
     }
   }, [game?.id, me, refetchGame, refetchGameProperties, properties, gameProperties, runMovementAnimation, END_TURN]);
 
@@ -1787,13 +1793,13 @@ function Board3DPageContent() {
   }, [currentPlayerId]);
 
   useEffect(() => {
-    if (!isAITurn || !currentPlayer || strategyRanThisTurn || !isLiveGame) return;
+    if (humanRollInProgress || !isAITurn || !currentPlayer || strategyRanThisTurn || !isLiveGame) return;
     const t = setTimeout(handleAiStrategy, 1000);
     return () => clearTimeout(t);
-  }, [isAITurn, currentPlayer, strategyRanThisTurn, isLiveGame, handleAiStrategy]);
+  }, [humanRollInProgress, isAITurn, currentPlayer, strategyRanThisTurn, isLiveGame, handleAiStrategy]);
 
   useEffect(() => {
-    if (!isLiveGame || !isAITurn || !strategyRanThisTurn || rollingDice || !currentPlayerId || !currentPlayer) return;
+    if (humanRollInProgress || !isLiveGame || !isAITurn || !strategyRanThisTurn || rollingDice || !currentPlayerId || !currentPlayer) return;
     if (me != null && currentPlayerId === me.user_id) return;
     if (rolledForPlayerIdRef.current === currentPlayerId) return;
     // Do not roll for AI when they have negative balance — useAiBankruptcy will liquidate / bankrupt first
@@ -1807,7 +1813,7 @@ function Board3DPageContent() {
       setRollingDice({ die1: value.die1, die2: value.die2 });
     }, 1500);
     return () => clearTimeout(t);
-  }, [isLiveGame, isAITurn, strategyRanThisTurn, rollingDice, currentPlayerId, currentPlayer, me]);
+  }, [humanRollInProgress, isLiveGame, isAITurn, strategyRanThisTurn, rollingDice, currentPlayerId, currentPlayer, me]);
 
   useEffect(() => {
     const history = game?.history ?? [];
@@ -1937,8 +1943,8 @@ function Board3DPageContent() {
         rollingDice: rollingDice ?? undefined,
         lastRollResult: lastRollResultToShow ?? undefined,
         history: historyToShow,
-        aiThinking: isLiveGame && !isMyTurn && currentPlayerId != null,
-        thinkingLabel: isLiveGame && !isMyTurn && currentPlayer ? `${currentPlayer.username ?? "Player"} is thinking...` : undefined,
+        aiThinking: isLiveGame && !humanRollInProgress && !isMyTurn && currentPlayerId != null,
+        thinkingLabel: isLiveGame && !humanRollInProgress && !isMyTurn && currentPlayer ? `${currentPlayer.username ?? "Player"} is thinking...` : undefined,
         resetViewTrigger,
         focusTilePosition: landedPositionForBuy ?? undefined,
         spinOrbitDegrees,
@@ -1962,6 +1968,7 @@ function Board3DPageContent() {
     lastRollResultToShow,
     historyToShow,
     isMyTurn,
+    humanRollInProgress,
     currentPlayer,
     resetViewTrigger,
     landedPositionForBuy,
