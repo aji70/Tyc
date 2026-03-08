@@ -114,6 +114,26 @@ function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: st
   return tex;
 }
 
+/** Small texture for owner badge above a tile (short name, readable on dark board). */
+function makeOwnerBadgeTexture(ownerName: string): THREE.CanvasTexture {
+  const w = 128;
+  const h = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(0, 0, w, h);
+  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#e2e8f0";
+  ctx.fillText(ownerName.length > 12 ? ownerName.slice(0, 11) + "…" : ownerName, w / 2, h / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** Create a texture with the emoji only (no background) for player token sprites. */
 function makeEmojiTexture(emoji: string, _isCurrent: boolean): THREE.CanvasTexture {
   const size = 64;
@@ -135,6 +155,8 @@ function makeEmojiTexture(emoji: string, _isCurrent: boolean): THREE.CanvasTextu
 export type BuildBoardSceneOptions = {
   properties: Property[];
   developmentByPropertyId?: Record<number, number>;
+  /** Optional: owner username per property id (shows badge above tile) */
+  ownerByPropertyId?: Record<number, string>;
   /** Optional: meshes to make labels face camera each frame */
   labelMeshesRef?: { current: THREE.Mesh[] };
   /** Optional: tile meshes for raycasting (userData.propertyId set) */
@@ -146,7 +168,7 @@ export type BuildBoardSceneOptions = {
 };
 
 export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
-  const { properties, developmentByPropertyId = {}, labelMeshesRef, tileMeshesRef, players = [], animatedPositions = {}, currentPlayerId = null } = options;
+  const { properties, developmentByPropertyId = {}, ownerByPropertyId = {}, labelMeshesRef, tileMeshesRef, players = [], animatedPositions = {}, currentPlayerId = null } = options;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x010f10);
 
@@ -419,6 +441,29 @@ export function buildBoardScene(options: BuildBoardSceneOptions): THREE.Scene {
         }
       }
     }
+  }
+
+  // Owner badges: small label above each owned property/railroad/utility (always faces camera)
+  const OWNED_TILE_IDS = new Set([
+    ...BUILDABLE_POSITIONS,
+    5, 15, 25, 35, // railroads
+    12, 28,        // utilities
+  ]);
+  for (let i = 0; i < 40; i++) {
+    const ownerName = ownerByPropertyId[i];
+    if (!ownerName || !OWNED_TILE_IDS.has(i)) continue;
+    const [x, , z] = getPosition3D(i);
+    const badgeTex = makeOwnerBadgeTexture(ownerName);
+    const mat = new THREE.SpriteMaterial({
+      map: badgeTex,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.set(x, 0.18, z + TILE_SIZE * 0.38);
+    sprite.scale.set(0.55, 0.14, 1);
+    scene.add(sprite);
   }
 
   // Player tokens: sprites with emoji at each player's position

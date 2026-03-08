@@ -103,7 +103,7 @@ function postToParent(msg: Board3DMessageFromCanvas) {
 
 export default function Board3DCanvasPage() {
   const [state, setState] = useState<Board3DCanvasState | null>(null);
-  const [hoveredTile, setHoveredTile] = useState<{ propertyId: number; name: string } | null>(null);
+  const [hoveredTile, setHoveredTile] = useState<{ propertyId: number; name: string; screenX: number; screenY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -193,6 +193,7 @@ export default function Board3DCanvasPage() {
     const scene = buildBoardScene({
       properties,
       developmentByPropertyId: state.developmentByPropertyId ?? {},
+      ownerByPropertyId: state.ownerByPropertyId ?? {},
       labelMeshesRef,
       tileMeshesRef,
       players: (state.players ?? []) as { user_id: number; position?: number; symbol?: string }[],
@@ -272,7 +273,7 @@ export default function Board3DCanvasPage() {
           const propertyId = hit.object.userData.propertyId as number;
           const prop = properties[propertyId];
           const name = (prop as Property)?.name ?? getSquareName(propertyId);
-          setHoveredTile({ propertyId, name });
+          setHoveredTile({ propertyId, name, screenX: e.clientX, screenY: e.clientY });
         } else {
           setHoveredTile(null);
         }
@@ -405,11 +406,11 @@ export default function Board3DCanvasPage() {
       <div ref={containerRef} className="flex-1 min-h-0 w-full relative" />
       {hoveredTile && (
         <div
-          className="pointer-events-none fixed z-50 px-3 py-1.5 rounded-lg bg-black/80 text-white text-sm font-medium shadow-lg border border-cyan-500/30 max-w-[200px] truncate"
+          className="pointer-events-none fixed z-50 px-3 py-1.5 rounded-lg bg-black/80 text-white text-sm font-medium shadow-lg border border-cyan-500/30 max-w-[200px] truncate whitespace-nowrap"
           style={{
-            left: "50%",
-            bottom: "4rem",
-            transform: "translateX(-50%)",
+            left: hoveredTile.screenX,
+            top: hoveredTile.screenY - 12,
+            transform: "translate(-50%, -100%)",
           }}
         >
           {hoveredTile.name}
