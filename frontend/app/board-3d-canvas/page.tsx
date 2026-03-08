@@ -23,6 +23,8 @@ let cachedBoardTexture: THREE.Texture | null = null;
 const DICE_ROLL_MS = 1400;
 const DICE_SHOW_RESULT_MS = 1500; // show settled dice (die1 + die2 = total) before player moves
 const DICE_SIZE = 0.6;
+const DICE_SPOT_RADIUS = 0.06;
+const DICE_SPOT_INSET = 0.38; // spot positions as fraction of half-size (0..1)
 /** Rotations so face 1..6 shows on top (x, y, z in radians). */
 const DICE_TOP_ROTATIONS: [number, number, number][] = [
   [0, 0, 0],
@@ -32,6 +34,67 @@ const DICE_TOP_ROTATIONS: [number, number, number][] = [
   [-Math.PI / 2, 0, 0],
   [Math.PI, 0, 0],
 ];
+
+/** Classic dice spot layouts (u, v in -1..1 per face). */
+const DICE_SPOT_LAYOUTS: [number, number][][] = [
+  [], // 0 unused
+  [[0, 0]], // 1
+  [[-0.6, -0.6], [0.6, 0.6]], // 2
+  [[-0.6, -0.6], [0, 0], [0.6, 0.6]], // 3
+  [[-0.6, -0.6], [-0.6, 0.6], [0.6, -0.6], [0.6, 0.6]], // 4
+  [[-0.6, -0.6], [-0.6, 0.6], [0, 0], [0.6, -0.6], [0.6, 0.6]], // 5
+  [[-0.6, -0.6], [-0.6, 0], [-0.6, 0.6], [0.6, -0.6], [0.6, 0], [0.6, 0.6]], // 6
+];
+
+/** Standard die: +x=3, -x=4, +y=1, -y=6, +z=2, -z=5 (BoxGeometry face order). */
+const DICE_FACE_VALUES = [3, 4, 1, 6, 2, 5];
+
+/** Face center and tangent axes (u, v) for each face index. */
+function getDiceFaceAxes(faceIndex: number, half: number): { center: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3 } {
+  const h = half;
+  switch (faceIndex) {
+    case 0: return { center: new THREE.Vector3(h, 0, 0), u: new THREE.Vector3(0, 1, 0), v: new THREE.Vector3(0, 0, 1) };
+    case 1: return { center: new THREE.Vector3(-h, 0, 0), u: new THREE.Vector3(0, -1, 0), v: new THREE.Vector3(0, 0, 1) };
+    case 2: return { center: new THREE.Vector3(0, h, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, 1) };
+    case 3: return { center: new THREE.Vector3(0, -h, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, -1) };
+    case 4: return { center: new THREE.Vector3(0, 0, h), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 1, 0) };
+    default: return { center: new THREE.Vector3(0, 0, -h), u: new THREE.Vector3(-1, 0, 0), v: new THREE.Vector3(0, 1, 0) };
+  }
+}
+
+function createDiceWithSpots(): THREE.Group {
+  const half = DICE_SIZE / 2;
+  const group = new THREE.Group();
+  const boxGeo = new THREE.BoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE);
+  const boxMat = new THREE.MeshStandardMaterial({
+    color: 0xf8f8f8,
+    roughness: 0.3,
+    metalness: 0.08,
+  });
+  group.add(new THREE.Mesh(boxGeo, boxMat));
+
+  const spotGeo = new THREE.SphereGeometry(DICE_SPOT_RADIUS, 12, 10);
+  const spotMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a,
+    roughness: 0.6,
+    metalness: 0,
+  });
+
+  const push = 0.01; // nudge spots out so they sit on the face
+  for (let faceIndex = 0; faceIndex < 6; faceIndex++) {
+    const value = DICE_FACE_VALUES[faceIndex];
+    const layout = DICE_SPOT_LAYOUTS[value];
+    const { center, u, v } = getDiceFaceAxes(faceIndex, half);
+    const scale = half * DICE_SPOT_INSET;
+    for (const [uu, vv] of layout) {
+      const spot = new THREE.Mesh(spotGeo.clone(), spotMat.clone());
+      spot.position.copy(center).add(u.clone().multiplyScalar(uu * scale)).add(v.clone().multiplyScalar(vv * scale));
+      spot.position.add(spot.position.clone().normalize().multiplyScalar(push));
+      group.add(spot);
+    }
+  }
+  return group;
+}
 
 function postToParent(msg: Board3DMessageFromCanvas) {
   if (typeof window === "undefined" || !window.parent) return;
@@ -232,18 +295,12 @@ export default function Board3DCanvasPage() {
     if (rolling && typeof rolling.die1 === "number" && typeof rolling.die2 === "number") {
       const diceGroup = new THREE.Group();
       diceGroup.position.set(0, 1, 0);
-      const boxGeo = new THREE.BoxGeometry(DICE_SIZE, DICE_SIZE, DICE_SIZE);
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xf8f8f8,
-        roughness: 0.3,
-        metalness: 0.08,
-      });
       const die1Group = new THREE.Group();
       die1Group.position.set(-DICE_SIZE * 1.2, 0, 0);
-      die1Group.add(new THREE.Mesh(boxGeo, mat));
+      die1Group.add(createDiceWithSpots());
       const die2Group = new THREE.Group();
       die2Group.position.set(DICE_SIZE * 1.2, 0, 0);
-      die2Group.add(new THREE.Mesh(boxGeo.clone(), mat.clone()));
+      die2Group.add(createDiceWithSpots());
       diceGroup.add(die1Group);
       diceGroup.add(die2Group);
       scene.add(diceGroup);
