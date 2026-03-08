@@ -335,6 +335,8 @@ function Board3DPageContent() {
   const [liveMovementOverride, setLiveMovementOverride] = useState<Record<number, number>>({});
   const rollingForPlayerIdRef = useRef<number | null>(null);
   const rolledForPlayerIdRef = useRef<number | null>(null);
+  /** Guard: prevent change-position from being sent twice for the human in the same turn (backend would return passed_turn and advance turn). */
+  const humanChangePositionSubmittedRef = useRef(false);
   const [strategyRanThisTurn, setStrategyRanThisTurn] = useState(false);
 
   const currentPlayer = useMemo(() => {
@@ -1190,6 +1192,12 @@ function Board3DPageContent() {
       rollingForPlayerIdRef.current = null;
       return;
     }
+    // Prevent double-submit: if we already sent change-position this turn, do not send again (backend would return passed_turn and advance turn).
+    if (humanChangePositionSubmittedRef.current) {
+      setRollingDice(null);
+      rollingForPlayerIdRef.current = null;
+      return;
+    }
     const currentPos = me.position ?? 0;
     const isInJail = !!(me.in_jail && currentPos === JAIL_POSITION);
     const rolledDouble = value.die1 === value.die2;
@@ -1238,6 +1246,7 @@ function Board3DPageContent() {
       await new Promise((r) => setTimeout(r, DICE_RESULT_DISPLAY_BEFORE_MOVE_MS));
 
       await runMovementAnimation(me.user_id, currentPos, totalSteps);
+      humanChangePositionSubmittedRef.current = true;
       const res = await apiClient.post<{
         data?: {
           still_in_jail?: boolean;
@@ -1320,6 +1329,7 @@ function Board3DPageContent() {
       }
       // Don't call END_TURN here — let the useEffect below handle auto end (matches 2D; avoids turn break on Chance/CC)
     } catch (err) {
+      humanChangePositionSubmittedRef.current = false;
       try {
         setLiveMovementOverride((prev) => {
           const next = { ...prev };
@@ -1761,6 +1771,7 @@ function Board3DPageContent() {
   useEffect(() => {
     setStrategyRanThisTurn(false);
     rolledForPlayerIdRef.current = null;
+    humanChangePositionSubmittedRef.current = false;
   }, [currentPlayerId]);
 
   useEffect(() => {
