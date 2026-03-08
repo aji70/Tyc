@@ -19,19 +19,16 @@ import { useStarknetWallet } from '@/context/starknet-wallet-provider';
 import { useProfileAvatar } from '@/context/ProfileContext';
 import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
+import { toast } from 'react-hot-toast';
 
 const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
 
 const NavBar = () => {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const _pathname = usePathname();
+  const _searchParams = useSearchParams();
   const router = useRouter();
   const { scrollYProgress } = useScroll();
 
-  const isGamePage = pathname?.includes('/board') || pathname?.includes('game-play') || pathname?.includes('ai-play');
-  const shopHref = isGamePage && pathname
-    ? `/game-shop?returnTo=${encodeURIComponent(pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : ''))}`
-    : '/game-shop';
   const scaleX = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
@@ -149,28 +146,28 @@ const NavBar = () => {
             </Link>
           )}
 
-          {/* Perk Shop button (only when connected) */}
+          {/* Perk Shop button (only when connected) — Coming soon */}
           {isConnected && (
-            <Link
-              href={shopHref}
-              onMouseEnter={() => router.prefetch('/game-shop')}
-              className="min-w-[90px] h-[40px] px-3 border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC]"
+            <button
+              type="button"
+              onClick={() => toast('Coming soon', { icon: '🛒' })}
+              className="min-w-[90px] h-[40px] px-3 border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#0FF0FC] cursor-pointer"
             >
               <ShoppingBag className="w-[16px] h-[16px]" />
               <span className="text-[12px] font-[400] font-dmSans">Perk Shop</span>
-            </Link>
+            </button>
           )}
 
-          {/* Leaderboard button (only when connected) */}
+          {/* Leaderboard button (only when connected) — Coming soon */}
           {isConnected && (
-            <Link
-              href="/leaderboard"
-              onMouseEnter={() => router.prefetch('/leaderboard')}
-              className="w-[100px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            <button
+              type="button"
+              onClick={() => toast('Coming soon', { icon: '🏆' })}
+              className="w-[100px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF] cursor-pointer"
             >
               <Trophy className="w-[16px] h-[16px]" />
               <span className="text-[12px] font-[400] font-dmSans">Leaderboard</span>
-            </Link>
+            </button>
           )}
 
           {/* Tournaments button (only when connected) */}
@@ -184,15 +181,16 @@ const NavBar = () => {
             </Link>
           )}
 
-          {/* Rooms button (only when connected) — general lobby with chat */}
+          {/* Rooms button (only when connected) — Coming soon */}
           {isConnected && (
-            <Link
-              href="/rooms"
-              className="w-[75px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+            <button
+              type="button"
+              onClick={() => toast('Coming soon', { icon: '💬' })}
+              className="w-[75px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF] cursor-pointer"
             >
               <MessageCircle className="w-[16px] h-[16px]" />
               <span className="text-[12px] font-[400] font-dmSans">Rooms</span>
-            </Link>
+            </button>
           )}
 
           {/* How to Play — always visible */}
