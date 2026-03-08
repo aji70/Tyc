@@ -132,6 +132,8 @@ Then point `NEXT_PUBLIC_TORII_URL` at your Torii (e.g. `http://localhost:8080`).
 
 ## Docs
 
+- **https://docs.provable.games** – Provable Games documentation (EGS, Loot Survivor, Budokan, etc.).
+- **EGS (Embeddable Game Standard)** – [docs](https://docs.provable.games/embeddable-game-standard); Tycoon integrates via the EGS games list and Denshokan API; see `/egs-games` in the app.
 - **tycoon_contract/README.md** – Dojo world, Katana/Torii, Cartridge session keys, testing.
 - **tycoon_contract/docs/INTEGRATION_TEST.md** – Full integration test flow.
 

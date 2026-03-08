@@ -6,7 +6,7 @@ import Logo from './logo';
 import LogoIcon from '@/public/logo.png';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
-import { House, Volume2, VolumeOff, Globe, Menu, X, User, ShoppingBag, Trophy, Swords, BookOpen } from 'lucide-react';
+import { House, Volume2, VolumeOff, Globe, Menu, X, User, ShoppingBag, Trophy, Swords, BookOpen, Gamepad2, ExternalLink } from 'lucide-react';
 import useSound from 'use-sound';
 import { useNetwork } from '@starknet-react/core';
 import Image from 'next/image';
@@ -264,6 +264,30 @@ const NavBarMobile = ({ minimal = false }: NavBarMobileProps) => {
                   </div>
                   How to Play
                 </Link>
+
+                <Link
+                  href="/egs-games"
+                  onClick={closeMobileMenu}
+                  className="flex items-center gap-4 py-4 px-5 rounded-xl bg-[#011112]/70 hover:bg-[#022a2c]/80 border border-transparent hover:border-[#00F0FF]/25 text-[#00F0FF] font-medium transition-all duration-200 hover:shadow-[0_0_20px_rgba(0,240,255,0.08)]"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-[#003B3E]/50 flex items-center justify-center text-[#00F0FF]/90">
+                    <Gamepad2 size={20} />
+                  </div>
+                  EGS Games
+                </Link>
+
+                <a
+                  href="https://docs.provable.games"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={closeMobileMenu}
+                  className="flex items-center gap-4 py-4 px-5 rounded-xl bg-[#011112]/70 hover:bg-[#022a2c]/80 border border-transparent hover:border-[#00F0FF]/25 text-[#00F0FF] font-medium transition-all duration-200 hover:shadow-[0_0_20px_rgba(0,240,255,0.08)]"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-[#003B3E]/50 flex items-center justify-center text-[#00F0FF]/90">
+                    <ExternalLink size={20} />
+                  </div>
+                  Docs (Provable)
+                </a>
 
                 <button
                   type="button"

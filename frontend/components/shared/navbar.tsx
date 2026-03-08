@@ -6,7 +6,7 @@ import Logo from './logo';
 import LogoIcon from '@/public/logo.png';
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
-import { House, Volume2, VolumeOff, User, ShoppingBag, Trophy, Globe, Swords, MessageCircle, Wallet, BookOpen } from 'lucide-react';
+import { House, Volume2, VolumeOff, User, ShoppingBag, Trophy, Globe, Swords, MessageCircle, Wallet, BookOpen, Gamepad2, ExternalLink } from 'lucide-react';
 import useSound from 'use-sound';
 import { useNetwork } from '@starknet-react/core';
 import { PiUserCircle } from 'react-icons/pi';
@@ -21,7 +21,7 @@ import { useOnlineUsers } from '@/hooks/useOnlineUsers';
 import { useGuestAuthOptional } from '@/context/GuestAuthContext';
 import { toast } from 'react-hot-toast';
 
-const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard'] as const;
+const PREFETCH_ROUTES = ['/game-shop', '/profile', '/leaderboard', '/egs-games'] as const;
 
 const NavBar = () => {
   const pathname = usePathname();
@@ -205,6 +205,26 @@ const NavBar = () => {
             <BookOpen className="w-[16px] h-[16px]" />
             <span className="text-[12px] font-[400] font-dmSans">How to Play</span>
           </Link>
+
+          {/* EGS Games — Embeddable Game Standard */}
+          <Link
+            href="/egs-games"
+            className="w-[90px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+          >
+            <Gamepad2 className="w-[16px] h-[16px]" />
+            <span className="text-[12px] font-[400] font-dmSans">EGS</span>
+          </Link>
+
+          {/* Docs — Provable Games */}
+          <a
+            href="https://docs.provable.games"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-[70px] h-[40px] border border-[#0E282A] hover:border-[#003B3E] rounded-[12px] hidden md:flex justify-center items-center gap-2 bg-[#011112] text-[#00F0FF]"
+          >
+            <ExternalLink className="w-[16px] h-[16px]" />
+            <span className="text-[12px] font-[400] font-dmSans">Docs</span>
+          </a>
 
           {/* Home button */}
           <Link

@@ -20,6 +20,22 @@ const Footer = () => {
             How to Play
           </Link>
           <span className="text-[#455A64]">·</span>
+          <Link
+            href="/egs-games"
+            className="text-[#F0F7F7] hover:text-[#00F0FF] text-[12px] font-dmSans font-[400] transition-colors"
+          >
+            EGS Games
+          </Link>
+          <span className="text-[#455A64]">·</span>
+          <a
+            href="https://docs.provable.games"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[#F0F7F7] hover:text-[#00F0FF] text-[12px] font-dmSans font-[400] transition-colors"
+          >
+            Docs
+          </a>
+          <span className="text-[#455A64]">·</span>
           <p className="text-[#F0F7F7] text-[12px] font-dmSans font-[400]">
             ©{new Date().getFullYear()} Tycoon &bull; All rights reserved.
           </p>
