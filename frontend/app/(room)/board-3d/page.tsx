@@ -44,6 +44,8 @@ import AiBoard3DView from "@/components/game/board3d/AiBoard3DView";
 import { postToCanvas } from "@/lib/board3d-iframe-messages";
 
 const MOVE_ANIMATION_MS_PER_SQUARE = 250;
+/** Show "You rolled X + Y = total" for this long before starting movement animation. */
+const DICE_RESULT_DISPLAY_BEFORE_MOVE_MS = 1500;
 
 const PERK_CASH_TIERS = [0, 100, 250, 500, 700, 1000];
 const PERK_REFUND_TIERS = [0, 60, 150, 300, 420, 600];
@@ -1218,6 +1220,11 @@ function Board3DPageContent() {
     const totalSteps = (isInJail && !rolledDouble) ? 0 : totalMove;
 
     try {
+      // Order: show "You rolled die1 + die2 = total" first, then animate movement.
+      setLastRollResultLive(value);
+      setRollingDice(null);
+      await new Promise((r) => setTimeout(r, DICE_RESULT_DISPLAY_BEFORE_MOVE_MS));
+
       await runMovementAnimation(me.user_id, currentPos, totalSteps);
       const res = await apiClient.post<{
         data?: {
@@ -1246,7 +1253,6 @@ function Board3DPageContent() {
       if (data?.still_in_jail) {
         setJailChoiceRequired(true);
       }
-      setLastRollResultLive(value);
       const finalPosition = data?.new_position != null ? data.new_position : newPos;
       landedPositionThisTurnRef.current = finalPosition;
       const [_, gpRes] = await Promise.all([refetchGame(), refetchGameProperties()]);
