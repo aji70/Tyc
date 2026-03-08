@@ -573,7 +573,10 @@ function Board3DPageContent() {
     return merged;
   }, [isLiveGame, animatedPositions, liveAnimatedPositions, liveMovementOverride, livePlayers]);
   const developmentByPropertyId = isLiveGame ? liveDevelopmentByPropertyId : demoDevelopmentByPropertyId;
-  const showRollUi = !isLiveGame || (playerCanRoll && !(meInJail && !jailChoiceRequired));
+  // Show Roll only when it's the user's turn and they haven't rolled yet this turn (or are rolling for doubles again).
+  const showRollUi = !isLiveGame || (playerCanRoll && !(meInJail && !jailChoiceRequired) && !lastRollResultLive);
+  // Show End Turn when user has rolled and moved and no buy/jail choice is pending.
+  const showEndTurnUi = isLiveGame && isMyTurn && !!lastRollResultLive && !buyPrompted && !jailChoiceRequired && !rollingDice;
 
   const showToast = useCallback((message: string, type?: "success" | "error" | "default") => {
     if (type === "success") toast.success(message);
@@ -1734,11 +1737,14 @@ function Board3DPageContent() {
         case "FOCUS_COMPLETE":
           onFocusComplete();
           break;
+        case "END_TURN_CLICK":
+          END_TURN();
+          break;
       }
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [onRollClick, handlePropertyClick, onDiceCompleteClick, onFocusComplete, properties]);
+  }, [onRollClick, handlePropertyClick, onDiceCompleteClick, onFocusComplete, END_TURN, properties]);
 
   useEffect(() => {
     setStrategyRanThisTurn(false);
@@ -1895,7 +1901,6 @@ function Board3DPageContent() {
         ownerByPropertyId: isLiveGame ? ownerByPropertyId : undefined,
         rollingDice: rollingDice ?? undefined,
         lastRollResult: lastRollResultToShow ?? undefined,
-        rollLabel: undefined,
         history: historyToShow,
         aiThinking: isLiveGame && !isMyTurn && currentPlayerId != null,
         thinkingLabel: isLiveGame && !isMyTurn && currentPlayer ? `${currentPlayer.username ?? "Player"} is thinking...` : undefined,
@@ -1903,7 +1908,9 @@ function Board3DPageContent() {
         focusTilePosition: landedPositionForBuy ?? undefined,
         spinOrbitDegrees,
         showRollUi,
+        showEndTurnUi,
         isLiveGame,
+        rollLabel: lastRollResultToShow && isMyTurn ? "You rolled" : undefined,
       },
     });
   }, [
@@ -1926,6 +1933,7 @@ function Board3DPageContent() {
     landedPositionForBuy,
     spinOrbitDegrees,
     showRollUi,
+    showEndTurnUi,
   ]);
 
   const gameEnded = gameError && (gameQueryError as Error)?.message === "Game ended";

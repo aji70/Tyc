@@ -313,6 +313,7 @@ export default function Board3DCanvasPage() {
   }
 
   const showRollUi = state.showRollUi ?? false;
+  const showEndTurnUi = state.showEndTurnUi ?? false;
   const rollingDice = state.rollingDice;
   const lastRollResult = state.lastRollResult;
   const rollLabel = state.rollLabel;
@@ -370,6 +371,16 @@ export default function Board3DCanvasPage() {
               className="px-5 py-2.5 text-sm font-bold text-slate-900 uppercase tracking-wider rounded-lg border-2 border-cyan-700 shadow-[0_4px_0_#0e7490,0_6px_16px_rgba(0,0,0,0.35)] cursor-pointer hover:opacity-95 active:translate-y-0.5 active:shadow-[0_2px_0_#0e7490] transition-all bg-gradient-to-b from-cyan-300 via-cyan-400 to-cyan-500"
             >
               Roll
+            </button>
+          )}
+          {showEndTurnUi && (
+            <button
+              type="button"
+              aria-label="End turn"
+              onClick={() => postToParent({ type: "END_TURN_CLICK" })}
+              className="px-5 py-2.5 text-sm font-bold text-white uppercase tracking-wider rounded-lg border-2 border-amber-600/80 shadow-[0_4px_0_#b45309,0_6px_16px_rgba(0,0,0,0.35)] cursor-pointer hover:opacity-95 active:translate-y-0.5 active:shadow-[0_2px_0_#b45309] transition-all bg-gradient-to-b from-amber-500 via-amber-600 to-amber-700"
+            >
+              End Turn
             </button>
           )}
         </div>
