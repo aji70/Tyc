@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAccount, useNetwork } from '@starknet-react/core';
-import { formatUnits } from 'viem';
+import { formatUnits, type Address } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -147,6 +147,7 @@ export default function GameShop() {
   const usdcBalance = '0.00';
 
   // Shop items via API bundles (fallback when Dojo shop stock not available)
+  const contractTokenCount = 0;
   const shopTokenIds: bigint[] = [];
   const shopInfoResults: { status: string; result?: unknown }[] | undefined = undefined;
 
