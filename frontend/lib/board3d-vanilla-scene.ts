@@ -93,24 +93,35 @@ export function getColorSpec(prop: Property): string {
   return prop.color ?? TILE_COLORS[prop.id]?.color ?? "#1a3a3e";
 }
 
+/** Scale factor for canvas textures so they stay sharp on high-DPI (retina) displays. */
+const TEX_RES_SCALE = typeof window !== "undefined" ? Math.min(3, Math.max(1, window.devicePixelRatio || 1)) : 2;
+
+function applySharpTextureSettings(tex: THREE.CanvasTexture): void {
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+}
+
 /** Create a texture with text for tile labels (Chance ?, Chest, $, Jail, Go to Jail). Higher res for clarity. */
 function makeTextTexture(text: string, opts: { fontSize?: number; fontColor?: string; bgColor?: string; size?: number } = {}): THREE.CanvasTexture {
   const { fontSize = 36, fontColor = "#1a1a1a", bgColor = "transparent", size = 128 } = opts;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = size * TEX_RES_SCALE;
+  canvas.height = size * TEX_RES_SCALE;
   const ctx = canvas.getContext("2d")!;
+  ctx.scale(TEX_RES_SCALE, TEX_RES_SCALE);
   if (bgColor !== "transparent") {
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, size, size);
   }
-  ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+  ctx.font = `bold ${fontSize}px system-ui, -apple-system, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = fontColor;
   ctx.fillText(text, size / 2, size / 2);
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
+  applySharpTextureSettings(tex);
   return tex;
 }
 
@@ -119,18 +130,20 @@ function makeOwnerBadgeTexture(ownerName: string): THREE.CanvasTexture {
   const w = 128;
   const h = 32;
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = w * TEX_RES_SCALE;
+  canvas.height = h * TEX_RES_SCALE;
   const ctx = canvas.getContext("2d")!;
+  ctx.scale(TEX_RES_SCALE, TEX_RES_SCALE);
   ctx.fillStyle = "rgba(0,0,0,0.7)";
   ctx.fillRect(0, 0, w, h);
-  ctx.font = "bold 14px system-ui, sans-serif";
+  ctx.font = "bold 14px system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#e2e8f0";
   ctx.fillText(ownerName.length > 12 ? ownerName.slice(0, 11) + "…" : ownerName, w / 2, h / 2);
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
+  applySharpTextureSettings(tex);
   return tex;
 }
 
@@ -138,17 +151,19 @@ function makeOwnerBadgeTexture(ownerName: string): THREE.CanvasTexture {
 function makeEmojiTexture(emoji: string, _isCurrent: boolean): THREE.CanvasTexture {
   const size = 64;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = size * TEX_RES_SCALE;
+  canvas.height = size * TEX_RES_SCALE;
   const ctx = canvas.getContext("2d")!;
+  ctx.scale(TEX_RES_SCALE, TEX_RES_SCALE);
   const cx = size / 2;
   const cy = size / 2;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "32px system-ui, sans-serif";
+  ctx.font = "32px system-ui, -apple-system, sans-serif";
   ctx.fillText(emoji, cx, cy);
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
+  applySharpTextureSettings(tex);
   return tex;
 }
 
