@@ -546,6 +546,23 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
 
     try {
       setJoinError(null);
+      toast.update(toastId, { render: "Checking game status..." });
+
+      // Refetch on-chain state right before joining to avoid "game not open" race (game may have just started)
+      const fresh = await getGameByCode(gameCode);
+      const arr = Array.isArray(fresh) ? fresh : [fresh];
+      const status = arr[3];
+      const pendingFelt = BigInt(shortString.encodeShortString("PENDING"));
+      if (status != null && BigInt(String(status)) !== pendingFelt) {
+        const msg =
+          "This game has already started (all spots were filled). You can't join this game. Ask the host for a new game code.";
+        setError(msg);
+        toast.update(toastId, { render: msg, type: "error", isLoading: false, autoClose: 6000 });
+        actionGuardRef.current = false;
+        setActionLoading(false);
+        return;
+      }
+
       toast.update(toastId, { render: "Joining game on-chain (Dojo)..." });
 
       await dojoJoinGame(
@@ -603,6 +620,8 @@ export function useWaitingRoom(options: UseWaitingRoomOptions = {}) {
     account,
     guestUser,
     dojoJoinGame,
+    getGameByCode,
+    gameCode,
     stakePerPlayer,
     contractId,
     tournamentLobby,

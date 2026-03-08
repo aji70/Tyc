@@ -45,6 +45,23 @@ export function getContractErrorMessage(
     return "This game isn't an AI game on-chain. Make sure your wallet is on the same network you used when creating the game (e.g. Starknet).";
   }
 
+  // Contract revert: join_game "game not open" (game already started or ended)
+  if (errMsg.includes("game not open")) {
+    return "This game has already started (all spots were filled). You can't join this game. Ask the host for a new game code.";
+  }
+  if (errMsg.includes("game full")) {
+    return "This game is full. You can't join this game.";
+  }
+  if (errMsg.includes("already joined")) {
+    return "You're already in this game. Open the game with the code to play.";
+  }
+  if (errMsg.includes("wrong code")) {
+    return "Wrong game code. Check the code and try again.";
+  }
+  if (errMsg.includes("game not found")) {
+    return "Game not found on-chain. Check the game code and network, or the game may not exist yet.";
+  }
+
   // Contract revert / execution reverted
   if (
     e?.cause?.name === "ExecutionRevertedError" ||
