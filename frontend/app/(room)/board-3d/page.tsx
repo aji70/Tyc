@@ -44,8 +44,8 @@ import AiBoard3DView from "@/components/game/board3d/AiBoard3DView";
 import { postToCanvas } from "@/lib/board3d-iframe-messages";
 
 const MOVE_ANIMATION_MS_PER_SQUARE = 250;
-/** Show "You rolled X + Y = total" for this long before starting movement animation. */
-const DICE_RESULT_DISPLAY_BEFORE_MOVE_MS = 1500;
+/** Canvas already shows dice result for DICE_SHOW_RESULT_MS (1500ms). When we receive DICE_COMPLETE, only a short buffer before starting movement. */
+const DICE_RESULT_DISPLAY_BEFORE_MOVE_MS = 150;
 
 const PERK_CASH_TIERS = [0, 100, 250, 500, 700, 1000];
 const PERK_REFUND_TIERS = [0, 60, 150, 300, 420, 600];
@@ -1098,7 +1098,7 @@ function Board3DPageContent() {
     }
   }, [buyPrompted]);
 
-  // Fallback: if canvas never sends FOCUS_COMPLETE (e.g. iframe), show buy prompt after delay when we have a landed position for buy.
+  // Fallback: if canvas never sends FOCUS_COMPLETE, show buy prompt after short delay (parent already sets buy prompt in handleDiceCompleteForLive; this is safety only).
   useEffect(() => {
     if (!isLiveGame || landedPositionForBuy == null) return;
     const t = window.setTimeout(() => {
@@ -1106,7 +1106,7 @@ function Board3DPageContent() {
         pendingBuyPromptRef.current = false;
         setBuyPrompted(true);
       }
-    }, 2000);
+    }, 600);
     return () => window.clearTimeout(t);
   }, [isLiveGame, landedPositionForBuy]);
 
@@ -1334,16 +1334,20 @@ function Board3DPageContent() {
         pendingShowCardModalRef.current = true;
       }
       // After a Chance/Community Chest card move, backend may require rent (already applied) or buy prompt
+      let needBuyPrompt = false;
       if (data?.requires_buy && data?.property_for_buy) {
         pendingBuyPromptRef.current = true;
+        needBuyPrompt = true;
       } else {
         const square = properties.find((p) => p.id === finalPosition);
         const isOwned = freshGameProperties.some((gp: GameProperty) => gp.property_id === finalPosition);
         const action = PROPERTY_ACTION(finalPosition);
         const isBuyableType = !!action && ["land", "railway", "utility"].includes(action);
-        const needBuyPrompt = !!square && square.price != null && !isOwned && isBuyableType;
+        needBuyPrompt = !!square && square.price != null && !isOwned && isBuyableType;
         if (needBuyPrompt) pendingBuyPromptRef.current = true;
       }
+      // Show buy prompt as soon as movement ends (mirrors 2D useGameBoardLogic), not dependent on canvas FOCUS_COMPLETE
+      if (needBuyPrompt) setBuyPrompted(true);
       // Don't call END_TURN here — let the useEffect below handle auto end (matches 2D; avoids turn break on Chance/CC)
     } catch (err) {
       humanChangePositionSubmittedRef.current = false;
