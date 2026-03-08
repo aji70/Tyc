@@ -155,6 +155,29 @@ export default function Board3DCanvasPage() {
     postToParent({ type: "FOCUS_COMPLETE" });
   }, []);
 
+  // When parent sets focusTilePosition (landed on a buyable property), notify after a short delay so buy prompt can show.
+  const focusCompleteSentRef = useRef<number | null>(null);
+  const focusTimeoutRef = useRef<number | null>(null);
+  useEffect(() => {
+    const pos = state?.focusTilePosition;
+    if (pos == null || typeof pos !== "number") {
+      if (focusTimeoutRef.current) {
+        clearTimeout(focusTimeoutRef.current);
+        focusTimeoutRef.current = null;
+      }
+      focusCompleteSentRef.current = null;
+      return;
+    }
+    if (focusCompleteSentRef.current === pos) return; // already sent or timer pending for this pos
+    focusCompleteSentRef.current = pos;
+    if (focusTimeoutRef.current) clearTimeout(focusTimeoutRef.current);
+    focusTimeoutRef.current = window.setTimeout(() => {
+      focusTimeoutRef.current = null;
+      onFocusComplete();
+    }, 600);
+    // No cleanup: allow timeout to fire even if effect re-runs with same pos (e.g. state object reference change).
+  }, [state?.focusTilePosition, onFocusComplete]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !state?.properties?.length) return;

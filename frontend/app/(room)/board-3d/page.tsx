@@ -1081,6 +1081,18 @@ function Board3DPageContent() {
     }
   }, [buyPrompted]);
 
+  // Fallback: if canvas never sends FOCUS_COMPLETE (e.g. iframe), show buy prompt after delay when we have a landed position for buy.
+  useEffect(() => {
+    if (!isLiveGame || landedPositionForBuy == null) return;
+    const t = window.setTimeout(() => {
+      if (pendingBuyPromptRef.current) {
+        pendingBuyPromptRef.current = false;
+        setBuyPrompted(true);
+      }
+    }, 2000);
+    return () => window.clearTimeout(t);
+  }, [isLiveGame, landedPositionForBuy]);
+
   useEffect(() => {
     if (!aiTipsOn || !isMyTurn || !buyPrompted || !justLandedProperty || !currentPlayer || currentPlayer?.user_id !== me?.user_id) return;
     const propId = justLandedProperty.id;
