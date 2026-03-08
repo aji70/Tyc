@@ -1164,9 +1164,11 @@ function Board3DPageContent() {
     properties,
   ]);
 
-  // Auto-end turn when movement is done and no buy/jail choice (matches 2D; avoids turn break on Chance/CC)
+  // Auto-end turn when movement is done and no buy/jail choice (matches 2D; avoids turn break on Chance/CC).
+  // Do NOT run while humanRollInProgress: we clear rollingDice before movement/API, so without this we'd
+  // schedule END_TURN(1500ms) and end the turn before change-position is sent → "not your turn".
   useEffect(() => {
-    if (!isLiveGame || !isMyTurn || !lastRollResultLive || buyPrompted || jailChoiceRequired || rollingDice) {
+    if (!isLiveGame || !isMyTurn || !lastRollResultLive || buyPrompted || jailChoiceRequired || rollingDice || humanRollInProgress) {
       hasScheduledTurnEndRef.current = false;
       return;
     }
@@ -1182,7 +1184,7 @@ function Board3DPageContent() {
       clearTimeout(timer);
       hasScheduledTurnEndRef.current = false;
     };
-  }, [isLiveGame, isMyTurn, lastRollResultLive, buyPrompted, jailChoiceRequired, rollingDice, END_TURN]);
+  }, [isLiveGame, isMyTurn, lastRollResultLive, buyPrompted, jailChoiceRequired, rollingDice, humanRollInProgress, END_TURN]);
 
   const runMovementAnimation = useCallback(
     async (playerId: number, currentPos: number, totalSteps: number) => {
