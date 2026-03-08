@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import React, { useState } from "react";
 import ChatRoom from "./chat-room";
 import ChatRoomDesktop from "./chat-room-desktop";
+import { EgsBadge } from "./egs-badge";
 import { PiChatsCircle } from "react-icons/pi";
 import { Game, Player } from "@/types/game";
 
@@ -30,10 +31,11 @@ const GameRoom = ({ game, me, isMobile = false, fillContainer = false }: GameRoo
   if (isMobile) {
     return (
       <div className="flex flex-col h-full min-h-[50vh] overflow-hidden bg-[#0a0f10]">
-        <div className="flex-shrink-0 flex items-center px-4 py-2.5 border-b border-white/5">
+        <div className="flex-shrink-0 flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-white/5">
           <h3 className="font-bold text-sm text-white font-dmSans tracking-tight">
             Game Chat{gameId ? ` · ${gameId}` : ""}
           </h3>
+          <EgsBadge gameId={game?.id} />
         </div>
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           <ChatRoom gameId={gameId} me={me} isMobile />
@@ -46,10 +48,11 @@ const GameRoom = ({ game, me, isMobile = false, fillContainer = false }: GameRoo
   if (fillContainer) {
     return (
       <aside className="w-full h-full min-h-0 bg-[#0a0f10] border-l border-white/5 overflow-hidden flex flex-col">
-        <div className="flex-shrink-0 flex items-center px-4 py-2.5 border-b border-white/5">
+        <div className="flex-shrink-0 flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-white/5">
           <h4 className="font-bold text-lg text-white font-dmSans tracking-tight">
             Game Chat{gameId ? ` · ${gameId}` : ""}
           </h4>
+          <EgsBadge gameId={game?.id} />
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           <ChatRoomDesktop gameId={gameId} me={me} />
@@ -97,7 +100,7 @@ const GameRoom = ({ game, me, isMobile = false, fillContainer = false }: GameRoo
 
         {isSidebarOpen && (
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-white/5">
+            <div className="flex-shrink-0 flex items-center gap-2 flex-wrap px-4 py-2.5 border-b border-white/5">
               <button
                 onClick={toggleSidebar}
                 className="lg:hidden text-[#869298] hover:text-white transition-colors p-1 rounded"
@@ -108,6 +111,7 @@ const GameRoom = ({ game, me, isMobile = false, fillContainer = false }: GameRoo
               <h4 className="font-bold text-lg text-white font-dmSans tracking-tight">
                 Game Chat{gameId ? ` · ${gameId}` : ""}
               </h4>
+              <EgsBadge gameId={game?.id} />
             </div>
 
             <div className="flex-1 min-h-0 overflow-hidden">

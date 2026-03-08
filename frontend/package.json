@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "dojo:manifest": "node scripts/generate-dojo-manifest.mjs"
+    "dojo:manifest": "node scripts/generate-dojo-manifest.mjs",
+    "deploy:egs": "node scripts/deploy-egs-adapter.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.39",

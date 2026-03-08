@@ -62,3 +62,12 @@ pub struct PlayerConfig {
     pub id: felt252,
     pub reward_contract: ContractAddress,
 }
+
+/// EGS adapter address (singleton). Key 0 = not set, write via set_egs_adapter.
+#[derive(Drop, Copy, Serde)]
+#[dojo::model]
+pub struct EgsConfig {
+    #[key]
+    pub id: u8,
+    pub adapter_address: ContractAddress,
+}

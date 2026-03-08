@@ -2,6 +2,14 @@
 // are generated here and used by the game system to call token and reward contracts.
 use starknet::ContractAddress;
 
+// EGS (Embeddable Game Standard) adapter: Tycoon game system calls this when a game ends.
+// The adapter implements IMinigameTokenData on its side for EGS platforms to read.
+#[starknet::interface]
+pub trait IEgsAdapter<T> {
+    fn record_result(ref self: T, game_id: felt252, score: u64);
+    fn set_authorized_caller(ref self: T, caller: ContractAddress);
+}
+
 #[starknet::interface]
 pub trait IToken<T> {
     fn init_token(ref self: T, owner: ContractAddress);

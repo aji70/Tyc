@@ -1,3 +1,4 @@
+pub mod egs_adapter;
 pub mod interfaces;
 pub mod tokens;
 

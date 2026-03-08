@@ -40,6 +40,10 @@ pub trait IGame<T> {
     fn withdraw_house(ref self: T, amount: u256);
     /// Owner drains all stake token held by this contract.
     fn drain_contract(ref self: T);
+    /// Owner sets EGS adapter address (0 = disable). Call init_egs_config once on existing worlds first.
+    fn set_egs_adapter(ref self: T, adapter: ContractAddress);
+    /// One-time init of EgsConfig singleton (for existing worlds that did not have it in init_game_config).
+    fn init_egs_config(ref self: T);
     /// Create a game as yourself. Stakes held by game contract.
     fn create_game(
         ref self: T,
@@ -120,14 +124,15 @@ mod game {
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const};
     use tycoon::interfaces::{
-        ITokenDispatcher, ITokenDispatcherTrait, IRewardDispatcher, IRewardDispatcherTrait,
+        IEgsAdapterDispatcher, IEgsAdapterDispatcherTrait, ITokenDispatcher, ITokenDispatcherTrait,
+        IRewardDispatcher, IRewardDispatcherTrait,
     };
     use tycoon::model::game_model::{
         CodeToGame, Game, GameCounter, GameOrderToPlayer, GameSettings, GameStatus, GameType,
     };
     use tycoon::model::game_player_model::{GamePlayer, PlayerSymbol};
     use tycoon::model::player_model::{AddressToUsername, User, Stats};
-    use tycoon::model::config_model::{Claim, GameConfig, HouseBalance, PreviousGameCode, TurnsPlayed};
+    use tycoon::model::config_model::{Claim, EgsConfig, GameConfig, HouseBalance, PreviousGameCode, TurnsPlayed};
     use super::{
         IGame, game_type_from_felt, player_symbol_from_felt,
         HOUSE_PERCENT, RANK1_PERCENT, RANK2_PERCENT, RANK3_PERCENT,
@@ -158,6 +163,26 @@ mod game {
             world.write_model(@config);
             let house = HouseBalance { id: 'house', amount: 0 };
             world.write_model(@house);
+            let egs = EgsConfig { id: 0, adapter_address: contract_address_const::<0>() };
+            world.write_model(@egs);
+        }
+
+        fn set_egs_adapter(ref self: ContractState, adapter: ContractAddress) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            let cfg: GameConfig = world.read_model('config');
+            assert(caller == cfg.owner, 'not owner');
+            let egs = EgsConfig { id: 0, adapter_address: adapter };
+            world.write_model(@egs);
+        }
+
+        fn init_egs_config(ref self: ContractState) {
+            let mut world = self.world_default();
+            let caller = get_caller_address();
+            let cfg: GameConfig = world.read_model('config');
+            assert(caller == cfg.owner, 'not owner');
+            let egs = EgsConfig { id: 0, adapter_address: contract_address_const::<0>() };
+            world.write_model(@egs);
         }
 
         fn set_min_stake(ref self: ContractState, new_min_stake: u256) {
@@ -541,6 +566,12 @@ mod game {
                     g2.ended_at = get_block_timestamp();
                     world.write_model(@g2);
 
+                    let egs: EgsConfig = world.read_model(0_u8);
+                    if egs.adapter_address != zero {
+                        let adapter = IEgsAdapterDispatcher { contract_address: egs.adapter_address };
+                        adapter.record_result(game_id.low.into(), 1_u64);
+                    }
+
                     let winner_gp: GamePlayer = world.read_model((game_id, winner));
                     let mut winner_user: User = world.read_model(winner_gp.username);
                     winner_user.games_won += 1;
@@ -712,6 +743,13 @@ mod game {
                 world.write_model(@u);
             }
             world.write_model(@game);
+
+            let egs: EgsConfig = world.read_model(0_u8);
+            if egs.adapter_address != contract_address_const::<0>() {
+                let adapter = IEgsAdapterDispatcher { contract_address: egs.adapter_address };
+                let score = if is_win { 1_u64 } else { 0_u64 };
+                adapter.record_result(game_id.low.into(), score);
+            }
 
             let cfg: GameConfig = world.read_model('config');
             if cfg.reward_contract != contract_address_const::<0>() {
